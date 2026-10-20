@@ -12,7 +12,9 @@ DATABASE_URL = os.getenv("SUPABASE_DB_URL")
 
 # Supabase URL needs a minor fix if using sqlalchemy and psycopg2
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 # Supabase requires SSL for all external connections.
 if DATABASE_URL and "sslmode" not in DATABASE_URL:

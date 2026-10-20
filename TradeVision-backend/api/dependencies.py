@@ -82,7 +82,7 @@ def build_news_pipeline() -> NewsSentimentPipeline:
     return NewsSentimentPipeline(mode=SCRAPER_MODE, analyzer=get_analyzer())
 
 security = HTTPBearer(auto_error=False)
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "").strip()
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Verifies the Supabase JWT token and returns the user payload."""
