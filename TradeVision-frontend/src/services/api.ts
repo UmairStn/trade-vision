@@ -323,10 +323,10 @@ export const fetchPrediction = async (
         targetDefinition: data.horizons['30d'].target_definition,
       } : undefined,
     } : undefined,
-    sentimentScore: data.sentiment_analysis.score,
-    sentimentLabel: data.sentiment_analysis.label,
-    headlineCount: data.sentiment_analysis.headline_count,
-    sentimentStatus: data.sentiment_analysis.status,
+    sentimentScore: data.sentiment_analysis?.score ?? 0,
+    sentimentLabel: data.sentiment_analysis?.label ?? (data.sentiment_analysis as unknown as { sentiment_label?: string })?.sentiment_label ?? 'Neutral',
+    headlineCount: data.sentiment_analysis?.headline_count ?? 0,
+    sentimentStatus: data.sentiment_analysis?.status ?? 'skipped',
     modelStatus: data.model_status,
     warnings: data.warnings ?? [],
     generatedAt: new Date().toISOString(),
@@ -620,3 +620,68 @@ export interface SectorItem {
 export const fetchSectors = async (): Promise<{ count: number; sectors: SectorItem[] }> => {
   return request('/api/v1/market/sectors');
 };
+
+// --- FinBERT Announcement Sentiment Feed & Risk Flags -----------------------
+
+export interface NewsItem {
+  id: string;
+  announcement_id?: number;
+  company: string;
+  symbol?: string | null;
+  category: string;
+  date: string;
+  sentiment_score: number;
+  sentiment_label: 'Bullish' | 'Bearish' | 'Neutral' | string;
+  label?: 'Bullish' | 'Bearish' | 'Neutral' | string;
+  type?: string | null;
+  pdf_url?: string | null;
+  source: string;
+}
+
+export interface MarketMood {
+  score: number;
+  label: 'Bullish' | 'Bearish' | 'Neutral';
+  bullish_pct: number;
+  total_analyzed: number;
+  bullish_count: number;
+  bearish_count: number;
+  neutral_count: number;
+}
+
+export interface NewsFeedResponse {
+  mood: MarketMood;
+  count: number;
+  feed: NewsItem[];
+}
+
+export const fetchNewsFeed = async (
+  symbol?: string,
+  sentiment?: string,
+  category?: string,
+  limit = 50
+): Promise<NewsFeedResponse> => {
+  const params = new URLSearchParams();
+  if (symbol) params.set('symbol', symbol);
+  if (sentiment && sentiment !== 'all') params.set('sentiment', sentiment);
+  if (category && category !== 'all') params.set('category', category);
+  if (limit) params.set('limit', String(limit));
+  return request(`/api/v1/news/feed?${params.toString()}`);
+};
+
+export interface RiskFlagsResponse {
+  symbol: string;
+  has_risk: boolean;
+  notice_count: number;
+  notices: Array<{
+    id: number;
+    announcement_id: number;
+    created_date: string;
+    title: string;
+    category: string;
+  }>;
+}
+
+export const fetchRiskFlags = async (symbol: string): Promise<RiskFlagsResponse> => {
+  return request(`/api/v1/news/risk-flags?symbol=${encodeURIComponent(symbol)}`);
+};
+

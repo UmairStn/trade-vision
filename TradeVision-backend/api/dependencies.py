@@ -28,23 +28,21 @@ from fastapi import Depends, HTTPException, status
 # pyrefly: ignore [missing-import]
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from services.news_pipeline import NewsSentimentPipeline
+from services.news_pipeline import AnnouncementSentimentPipeline, NewsSentimentPipeline
 from services.prediction_engine import StockPredictionEngine
 from services.scraper_mode import ScraperMode
 # pyrefly: ignore [missing-import]
 from services.sentiment import SentimentAnalyzer
 
-# RSS is the default: it needs no browser, is far more reliable than scraping
-# site markup, and is the only mode safe to run repeatedly behind an API.
 SCRAPER_MODE = ScraperMode(os.getenv("SCRAPER_MODE", ScraperMode.GOOGLE_NEWS_RSS.value))
 
 _analyzer: SentimentAnalyzer | None = None
 _engine: StockPredictionEngine | None = None
+_announcement_pipeline: AnnouncementSentimentPipeline | None = None
 
-# Requests are served from a threadpool, so two concurrent cold requests could
-# otherwise each start loading FinBERT.
 _analyzer_lock = threading.Lock()
 _engine_lock = threading.Lock()
+_announcement_lock = threading.Lock()
 
 
 def get_analyzer() -> SentimentAnalyzer:
@@ -67,10 +65,20 @@ def get_engine() -> StockPredictionEngine:
             if _engine is None:
                 _engine = StockPredictionEngine()
                 if _engine.is_loaded:
-                    print(f"[startup] XGBoost model loaded from {_engine.model_path}")
+                    print(f"[startup] XGBoost models loaded from {_engine.models_dir}")
                 else:
-                    print(f"[startup] Prediction model NOT loaded: {_engine.load_error}")
+                    print(f"[startup] Prediction models NOT loaded: {_engine.load_error}")
     return _engine
+
+
+def get_announcement_pipeline() -> AnnouncementSentimentPipeline:
+    """Shared announcement sentiment pipeline wrapping the shared FinBERT analyzer."""
+    global _announcement_pipeline
+    if _announcement_pipeline is None:
+        with _announcement_lock:
+            if _announcement_pipeline is None:
+                _announcement_pipeline = AnnouncementSentimentPipeline(analyzer=get_analyzer())
+    return _announcement_pipeline
 
 
 def build_news_pipeline() -> NewsSentimentPipeline:

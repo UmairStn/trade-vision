@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { name: 'Home', path: '/' },
   { name: 'Analyzer', path: '/analyzer' },
   { name: 'Top Stocks', path: '/top-stocks' },
+  { name: 'News & Signals', path: '/news' },
   { name: 'AI Chat', path: '/chat' },
   { name: 'Dashboard', path: '/dashboard' },
 ] as const;

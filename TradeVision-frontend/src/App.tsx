@@ -17,6 +17,7 @@ import { IconContext } from '@phosphor-icons/react';
 import { Home } from './pages/Home';
 import { StockAnalyzer } from './pages/StockAnalyzer';
 import { TopStocks } from './pages/TopStocks';
+import { NewsHub } from './pages/NewsHub';
 import { Dashboard } from './pages/Dashboard';
 import { Chat } from './pages/Chat';
 import { Login } from './pages/Login';
@@ -63,6 +64,7 @@ const AnimatedRoutes = () => {
           <Route path="/" element={<Home />} />
           <Route path="/analyzer" element={<StockAnalyzer />} />
           <Route path="/top-stocks" element={<TopStocks />} />
+          <Route path="/news" element={<NewsHub />} />
           <Route
             path="/dashboard/*"
             element={

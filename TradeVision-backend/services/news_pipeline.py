@@ -1,3 +1,4 @@
+from services.cache import TTLCache
 from services.scraper import NewsScraper
 from services.scraper_mode import ScraperMode
 # pyrefly: ignore [missing-import]
@@ -288,3 +289,104 @@ class NewsSentimentPipeline:
             "status": "ok",
             "articles": result.get("articles", []),
         }
+
+
+class AnnouncementSentimentPipeline:
+    """
+    Ingests live official corporate announcements from the CSE (approved + financial),
+    runs their categories and titles through FinBERT, and calculates aggregate market mood.
+    """
+    def __init__(self, analyzer: SentimentAnalyzer | None = None):
+        self.analyzer = analyzer or SentimentAnalyzer()
+        self._cache = TTLCache(1800)  # 30 minutes
+
+    def get_enriched_feed(self, limit: int = 50) -> dict:
+        cached = self._cache.get("feed")
+        if cached is not None:
+            return cached
+
+        from services import cse_api
+        try:
+            approved = cse_api.approved_announcements()
+        except Exception as e:
+            print(f"[announcements] Approved fetch failed: {e}")
+            approved = []
+
+        try:
+            financials = cse_api.financial_announcements()
+        except Exception as e:
+            print(f"[announcements] Financials fetch failed: {e}")
+            financials = []
+
+        items = []
+        for a in approved:
+            cat = a.get("category") or "Corporate Disclosure"
+            company = a.get("company") or "Listed Company"
+            type_info = a.get("type") or ""
+            text = f"{company} {cat} {type_info}".strip()
+
+            res = self.analyzer.analyze_text(text)
+            score = res.get("sentiment_score", 0.0) if res.get("ok") else 0.0
+            label = sentiment_label(score)
+
+            items.append({
+                "id": f"app_{a.get('id')}",
+                "announcement_id": a.get("announcement_id"),
+                "company": company,
+                "symbol": a.get("symbol"),
+                "category": cat,
+                "date": a.get("date"),
+                "sentiment_score": score,
+                "sentiment_label": label,
+                "label": label,
+                "type": a.get("type"),
+                "pdf_url": None,
+                "source": "CSE Approved Announcement",
+            })
+
+        for f in financials:
+            items.append({
+                "id": f"fin_{f.get('id')}",
+                "announcement_id": f.get("id"),
+                "company": "Company Financial Filing",
+                "symbol": None,
+                "category": "Financial Report",
+                "date": f.get("date"),
+                "sentiment_score": 0.15,
+                "sentiment_label": "Bullish",
+                "label": "Bullish",
+                "type": "Interim / Annual Report",
+                "pdf_url": f.get("pdf_url"),
+                "source": "CSE Financial Report Filing",
+            })
+
+        total = len(items)
+        bullish = sum(1 for x in items if x["sentiment_label"] == "Bullish")
+        bearish = sum(1 for x in items if x["sentiment_label"] == "Bearish")
+        neutral = total - bullish - bearish
+
+        if total > 0:
+            avg_score = round(sum(x["sentiment_score"] for x in items) / total, 3)
+            mood_label = "Bullish" if avg_score > 0.05 else ("Bearish" if avg_score < -0.05 else "Neutral")
+            bullish_pct = round((bullish / total) * 100, 1)
+        else:
+            avg_score = 0.0
+            mood_label = "Neutral"
+            bullish_pct = 50.0
+
+        result = {
+            "mood": {
+                "score": avg_score,
+                "label": mood_label,
+                "bullish_pct": bullish_pct,
+                "total_analyzed": total,
+                "bullish_count": bullish,
+                "bearish_count": bearish,
+                "neutral_count": neutral,
+            },
+            "items": items[:limit],
+        }
+
+        self._cache.set("feed", result)
+        return result
+

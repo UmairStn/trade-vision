@@ -13,6 +13,8 @@ import type {
 import {
   fetchAiAnalysis,
   fetchPrediction,
+  fetchRiskFlags,
+  type RiskFlagsResponse,
   fetchStockHistory,
   fetchStockQuote,
 } from '../services/api';
@@ -79,7 +81,7 @@ export const StockAnalyzer = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const ticker = searchParams.get('ticker') || 'JKH.N0000';
+  const ticker = searchParams.get('ticker') || searchParams.get('symbol') || 'JKH.N0000';
 
   const [quote, setQuote] = useState<StockQuote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -181,6 +183,22 @@ export const StockAnalyzer = () => {
     };
   }, [ticker, predictionKey]);
 
+  // --- regulatory risk flags -------------------------------------------------
+  const [riskData, setRiskData] = useState<RiskFlagsResponse | null>(null);
+  useEffect(() => {
+    let stale = false;
+    fetchRiskFlags(ticker)
+      .then((res) => {
+        if (!stale) setRiskData(res);
+      })
+      .catch(() => {
+        if (!stale) setRiskData(null);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [ticker]);
+
   // A finished deep analysis belongs to one symbol, so it is discarded when the
   // symbol changes — but *not* when the prediction is merely retried.
   useEffect(() => {
@@ -264,13 +282,6 @@ export const StockAnalyzer = () => {
     [quote],
   );
 
-  const trendWords =
-    prediction?.trend === 'up'
-      ? 'Expected uptrend'
-      : prediction?.trend === 'down'
-        ? 'Expected downtrend'
-        : 'No clear direction';
-
   return (
     <PageShell>
       <PageHeader
@@ -336,6 +347,20 @@ export const StockAnalyzer = () => {
         </div>
       ) : (
         <div className="mb-16 mt-12">
+          {riskData?.has_risk && (
+            <Notice
+              tone="warn"
+              title="CSE Non-Compliance / Regulatory Risk Notice"
+              className="mb-8"
+            >
+              The exchange has published active non-compliance or penalty notices for this security.
+              {riskData.notices?.[0]?.title && ` (${riskData.notices[0].title})`}
+              <span className="block mt-1 font-medium">
+                Exercise caution and review full disclosures in the News & Signals Hub.
+              </span>
+            </Notice>
+          )}
+
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="font-mono text-xs uppercase tracking-wider text-ink-muted">
@@ -399,7 +424,7 @@ export const StockAnalyzer = () => {
             label="Date range"
             size="sm"
             value={range}
-            onChange={setRange}
+            onChange={(val) => setRange(val as RangeKey)}
             options={[
               { value: '1M', label: '1M' },
               { value: '3M', label: '3M' },
@@ -620,7 +645,7 @@ export const StockAnalyzer = () => {
                       <>
                         <div className="mt-2 flex items-center gap-2">
                           <Badge tone={prediction.sentimentLabel === 'Bullish' ? 'up' : prediction.sentimentLabel === 'Bearish' ? 'down' : 'neutral'}>
-                            {prediction.sentimentLabel}
+                            {prediction.sentimentLabel || 'Neutral'}
                           </Badge>
                           <span className="text-sm text-ink-muted font-mono">
                             score {prediction.sentimentScore.toFixed(3)}
