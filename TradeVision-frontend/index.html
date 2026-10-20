@@ -2,9 +2,60 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TradeVision</title>
+
+    <title>TradeVision — Colombo Stock Exchange Analytics</title>
+    <meta
+      name="description"
+      content="Live Colombo Stock Exchange prices, movers and market depth, with machine-learning direction forecasts, news sentiment and an AI research assistant."
+    />
+    <meta name="application-name" content="TradeVision" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0e14" media="(prefers-color-scheme: dark)" />
+
+    <!-- Removed Inter font preload, now using Geist via npm imports -->
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TradeVision" />
+    <meta property="og:title" content="TradeVision — Colombo Stock Exchange Analytics" />
+    <meta
+      property="og:description"
+      content="Live CSE prices, movers and market depth, with ML direction forecasts, news sentiment and an AI research assistant."
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="TradeVision — Colombo Stock Exchange Analytics" />
+    <meta
+      name="twitter:description"
+      content="Live CSE prices, movers and market depth, with ML direction forecasts, news sentiment and an AI research assistant."
+    />
+
+    <script>
+      // Stamp the theme class before first paint. ThemeProvider applies it in an
+      // effect, which is one frame too late and shows a white flash on reload
+      // for dark-mode users. Kept in sync with ThemeContext's initial state.
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          var dark =
+            saved === 'dark' ||
+            (saved !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+          var meta = document.querySelector('meta[name="theme-color"]:not([media])');
+          if (!meta) {
+            meta = document.createElement('meta');
+            meta.setAttribute('name', 'theme-color');
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute('content', dark ? '#0b0e14' : '#f6f7f9');
+        } catch (e) {
+          /* private mode / storage disabled — fall through to the light default */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

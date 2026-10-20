@@ -1,92 +1,99 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import { LineChart, Mail } from 'lucide-react';
+import { ChartLine, Warning } from '@phosphor-icons/react';
 
-export const Footer: React.FC = () => {
-  return (
-    <footer className="bg-primary border-t border-border mt-auto pt-6 pb-3">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          {/* Brand Column */}
-          <div className="col-span-1 md:col-span-1">
-            <Link to="/" className="flex items-center gap-2 mb-2 group inline-flex">
-              <div className="p-1 rounded bg-accent-green/10 text-accent-green group-hover:bg-accent-green group-hover:text-white transition-colors duration-300">
-                <LineChart className="w-3.5 h-3.5" />
-              </div>
-              <span className="font-bold text-base tracking-tight text-text-primary">
-                TradeVision
+/**
+ * Collapsed from four columns to three.
+ *
+ * The previous footer carried nine `href="#"` links (Documentation, API
+ * Reference, Market News, Help Center, Contact Sales, Partnerships, Privacy,
+ * Terms, Disclaimer), three dead social icons and a support address that does not
+ * exist. On a live deploy those are the clearest signal that a site is
+ * unfinished, so the rule here is: every link goes somewhere real, and anything
+ * that doesn't exist isn't listed. What's left is the disclaimer and the data
+ * provenance — both of which are genuinely worth saying.
+ */
+
+const PLATFORM_LINKS = [
+  { to: '/analyzer', label: 'Stock Analyzer' },
+  { to: '/top-stocks', label: 'Top Movers' },
+  { to: '/chat', label: 'AI Chat' },
+  { to: '/dashboard', label: 'Dashboard' },
+] as const;
+
+export const Footer = () => (
+  <footer className="mt-auto bg-card border-t border-line">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      {/* Plain border replaces gradient hairline */}
+      <div aria-hidden="true" className="h-px bg-line" />
+      <div className="py-10">
+        <div className="grid gap-8 md:grid-cols-[1.5fr_1fr_1.5fr]">
+          <div>
+            <Link
+              to="/"
+              className="group inline-flex items-center gap-2 rounded-md
+                         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
+              <span
+                className="flex h-7 w-7 items-center justify-center rounded-sm
+                           bg-brand text-on-brand"
+              >
+                <ChartLine className="h-4 w-4" aria-hidden="true" />
               </span>
+              <span className="font-bold tracking-tight text-ink">TradeVision</span>
             </Link>
-            <p className="text-[11px] text-text-secondary leading-relaxed mb-3">
-              Advanced AI-powered analysis for the Colombo Stock Exchange. Make smarter decisions with real-time predictions.
+            <p className="mt-3 max-w-xs text-sm text-ink-muted">
+              Machine-learning price forecasts and AI research for the Colombo Stock
+              Exchange.
             </p>
-            <div className="flex space-x-2">
-              <a href="#" className="text-text-secondary hover:text-accent-green transition-colors" title="Twitter/X">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-              </a>
-              <a href="#" className="text-text-secondary hover:text-accent-green transition-colors" title="GitHub">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
-                </svg>
-              </a>
-              <a href="#" className="text-text-secondary hover:text-accent-green transition-colors" title="LinkedIn">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path fillRule="evenodd" d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" clipRule="evenodd" />
-                </svg>
-              </a>
+          </div>
+
+          <nav aria-labelledby="footer-platform">
+            <h2 id="footer-platform" className="text-sm font-semibold text-ink">
+              Platform
+            </h2>
+            <ul className="mt-3 space-y-2">
+              {PLATFORM_LINKS.map((link) => (
+                <li key={link.to}>
+                  <Link
+                    to={link.to}
+                    className="rounded-sm text-sm text-ink-muted transition-colors duration-150
+                               hover:text-brand-ink
+                               focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <div>
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+              <Warning className="h-4 w-4 text-warn" aria-hidden="true" />
+              Before you trade on this
+            </h2>
+            <div className="mt-3 border-l-2 border-l-warn pl-3">
+              <p className="text-sm text-ink-muted">
+                TradeVision is a student project, not a licensed advisory service.
+                Forecasts are statistical estimates and can be wrong. Nothing here is
+                financial advice — verify every figure against the CSE before acting on
+                it.
+              </p>
+              <p className="mt-2 text-xs text-ink-muted">
+                Market data via the Colombo Stock Exchange and Yahoo Finance. Prices may
+                be delayed, and some CSE symbols are no longer updated upstream.
+              </p>
             </div>
-          </div>
-
-          {/* Platform Links */}
-          <div>
-            <h3 className="font-semibold text-xs text-text-primary mb-2">Platform</h3>
-            <ul className="space-y-1">
-              <li><Link to="/analyzer" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">Stock Analyzer</Link></li>
-              <li><Link to="/top-stocks" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">Top Movers</Link></li>
-              <li><Link to="/chat" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">AI Chat</Link></li>
-              <li><Link to="/dashboard" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">Dashboard</Link></li>
-            </ul>
-          </div>
-
-          {/* Resources */}
-          <div>
-            <h3 className="font-semibold text-xs text-text-primary mb-2">Resources</h3>
-            <ul className="space-y-1">
-              <li><a href="#" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">Documentation</a></li>
-              <li><a href="#" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">API Reference</a></li>
-              <li><a href="#" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">Market News</a></li>
-              <li><a href="#" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">Help Center</a></li>
-            </ul>
-          </div>
-
-          {/* Contact */}
-          <div>
-            <h3 className="font-semibold text-xs text-text-primary mb-2">Contact</h3>
-            <ul className="space-y-1">
-              <li className="flex items-center text-[11px] text-text-secondary">
-                <Mail className="w-3 h-3 mr-1.5" /> support@tradevision.ai
-              </li>
-              <li><a href="#" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">Contact Sales</a></li>
-              <li><a href="#" className="text-[11px] text-text-secondary hover:text-accent-green transition-colors">Partnerships</a></li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Bottom Bar */}
-        <div className="pt-3 border-t border-border flex flex-col md:flex-row justify-between items-center gap-2">
-          <p className="text-[11px] text-text-secondary text-center md:text-left">
-            &copy; {new Date().getFullYear()} TradeVision. All rights reserved. <br className="md:hidden" />
-            <span className="opacity-75 ml-0 md:ml-2">Not financial advice. Educational prototype.</span>
-          </p>
-          <div className="flex space-x-3 text-[11px] text-text-secondary">
-            <a href="#" className="hover:text-text-primary transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-text-primary transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-text-primary transition-colors">Disclaimer</a>
           </div>
         </div>
       </div>
-    </footer>
-  );
-};
+
+      {/* Copyright band */}
+      <div className="rounded-md bg-sunken px-4 py-3">
+        <p className="text-xs text-ink-muted">
+          &copy; {new Date().getFullYear()} TradeVision. Educational prototype.
+        </p>
+      </div>
+    </div>
+  </footer>
+);

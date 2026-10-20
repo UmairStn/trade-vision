@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LineChart, Mail, Lock } from 'lucide-react';
+import { ChartLine, Envelope, Lock } from '@phosphor-icons/react';
 import { supabase } from '../lib/supabase';
 
 export const Login: React.FC = () => {
@@ -16,7 +16,7 @@ export const Login: React.FC = () => {
       setError('Please fill in all fields');
       return;
     }
-    
+
     setLoading(true);
     setError('');
 
@@ -35,77 +35,117 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-primary p-4">
-      <div className="w-full max-w-md bg-primary border border-border rounded-2xl shadow-xl p-8 relative overflow-hidden">
-        {/* Decorative background glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-accent-green/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="relative z-10 text-center mb-8">
-          <div className="mx-auto w-12 h-12 bg-accent-green/10 text-accent-green rounded-xl flex items-center justify-center mb-4">
-            <LineChart className="w-6 h-6" />
+    <div className="bg-page relative flex min-h-[calc(100dvh-var(--spacing-nav))] items-center justify-center p-4">
+
+      <div className="bg-card elevated-pop relative w-full max-w-md rounded-2xl p-8 border border-line">
+        <div className="relative z-10 mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand/10 text-brand">
+            <ChartLine className="h-6 w-6" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-bold text-text-primary">Welcome Back</h1>
-          <p className="text-text-secondary mt-2">Log in to your TradeVision account</p>
+          <h1 className="text-h2 font-bold text-ink">Welcome back</h1>
+          <p className="mt-2 text-sm text-ink-secondary">
+            Log in to your TradeVision account
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="relative z-10 space-y-5">
           {error && (
-            <div className="p-3 bg-accent-red/10 border border-accent-red/20 text-accent-red text-sm rounded-lg text-center">
+            <div
+              role="alert"
+              className="rounded-md border border-l-4 border-l-danger border-danger/20 bg-danger-subtle px-3 py-2.5 text-center text-sm text-danger"
+            >
               {error}
             </div>
           )}
-          
+
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1">Email Address</label>
+            <label htmlFor="email" className="mb-1 block text-sm font-medium text-ink">
+              Email address
+            </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-secondary" />
-              <input 
-                type="email" 
+              <Envelope
+                className="pointer-events-none absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-ink-muted"
+                aria-hidden="true"
+              />
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-secondary border border-border rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-green focus:border-transparent transition-all"
+                className="w-full rounded-xl border border-line bg-sunken py-2.5 pr-4 pl-10 text-ink
+                           transition-[border-color,box-shadow] duration-150 ease-out-quart
+                           placeholder:text-ink-muted
+                           focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none"
                 placeholder="you@example.com"
               />
             </div>
           </div>
-          
+
           <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-sm font-medium text-text-primary">Password</label>
-              <a href="#" className="text-xs text-accent-green hover:underline">Forgot password?</a>
+            <div className="mb-1 flex items-center justify-between">
+              <label htmlFor="password" className="block text-sm font-medium text-ink">
+                Password
+              </label>
+              <span className="text-xs text-ink-muted" aria-hidden="true">
+                Forgot password?
+              </span>
             </div>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-secondary" />
-              <input 
+              <Lock
+                className="pointer-events-none absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-ink-muted"
+                aria-hidden="true"
+              />
+              <input
+                id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-secondary border border-border rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-green focus:border-transparent transition-all"
+                className="w-full rounded-md border border-line bg-sunken py-2.5 pr-4 pl-10 text-ink
+                           transition-[border-color,box-shadow] duration-150 ease-out-quart
+                           placeholder:text-ink-muted
+                           focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none"
                 placeholder="••••••••"
               />
             </div>
           </div>
 
           <div className="flex items-center">
-            <input type="checkbox" id="remember" className="rounded border-border text-accent-green focus:ring-accent-green bg-secondary" />
-            <label htmlFor="remember" className="ml-2 text-sm text-text-secondary">Remember me</label>
+            <input
+              type="checkbox"
+              id="remember"
+              className="rounded border-line bg-sunken text-brand focus:ring-brand/40"
+            />
+            <label htmlFor="remember" className="ml-2 text-sm text-ink-secondary">
+              Remember me
+            </label>
           </div>
 
-          <button 
+          <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl bg-accent-green text-white font-semibold hover:bg-accent-green/90 transition-all shadow-lg shadow-accent-green/20 disabled:opacity-50"
+            className="w-full rounded-xl bg-brand py-3 font-semibold text-on-brand
+                       transition-[background-color,transform] duration-150 ease-out-quart
+                       hover:bg-brand-hover active:translate-y-px
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand
+                       disabled:pointer-events-none disabled:opacity-50"
           >
-            {loading ? 'Logging In...' : 'Log In'}
+            {loading ? 'Logging in…' : 'Log in'}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-text-secondary relative z-10">
+        <p className="relative z-10 mt-6 text-center text-sm text-ink-secondary">
           Don't have an account?{' '}
-          <Link to="/register" className="font-medium text-text-primary hover:text-accent-green transition-colors">
-            Get Started &rarr;
+          <Link
+            to="/register"
+            className="font-medium text-brand-ink transition-colors duration-150 hover:text-brand"
+          >
+            Get started →
           </Link>
         </p>
+
+
       </div>
     </div>
   );

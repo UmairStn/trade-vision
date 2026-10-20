@@ -1,6 +1,7 @@
-import React from 'react';
-import { Bot, User, AlertCircle, Wrench } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { WarningCircle, Robot, User, Wrench } from '@phosphor-icons/react';
 import type { ChatMessage as ChatMessageData } from '../types/stock';
+import { cn } from '../lib/cn';
 
 /**
  * One chat bubble.
@@ -15,32 +16,32 @@ import type { ChatMessage as ChatMessageData } from '../types/stock';
  */
 
 /** `**19.90**` -> a <strong> node. Leaves everything else alone. */
-const renderInline = (text: string): React.ReactNode[] =>
+const renderInline = (text: string): ReactNode[] =>
   text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
     part.length > 4 && part.startsWith('**') && part.endsWith('**') ? (
-      <strong key={i} className="font-semibold text-text-primary">
+      <strong key={i} className="font-semibold text-ink">
         {part.slice(2, -2)}
       </strong>
     ) : (
       part
-    )
+    ),
   );
 
 const BULLET = /^\s*[*-]\s+/;
 
 /** Paragraphs and bullet lists. Blank lines separate blocks. */
-const renderBlocks = (content: string): React.ReactNode[] => {
-  const blocks: React.ReactNode[] = [];
+const renderBlocks = (content: string): ReactNode[] => {
+  const blocks: ReactNode[] = [];
   let bullets: string[] = [];
 
   const flushBullets = () => {
     if (!bullets.length) return;
     blocks.push(
-      <ul key={`ul${blocks.length}`} className="list-disc pl-5 space-y-1 my-2">
+      <ul key={`ul${blocks.length}`} className="my-2 list-disc space-y-1 pl-5">
         {bullets.map((item, i) => (
           <li key={i}>{renderInline(item)}</li>
         ))}
-      </ul>
+      </ul>,
     );
     bullets = [];
   };
@@ -55,7 +56,7 @@ const renderBlocks = (content: string): React.ReactNode[] => {
       blocks.push(
         <p key={`p${blocks.length}`} className="my-1">
           {renderInline(line)}
-        </p>
+        </p>,
       );
     }
   }
@@ -64,43 +65,61 @@ const renderBlocks = (content: string): React.ReactNode[] => {
   return blocks;
 };
 
-export const ChatMessage: React.FC<{ message: ChatMessageData }> = ({ message }) => {
-  const isUser = message.role === 'user';
+/** Round avatar beside a bubble. */
+const Avatar = ({
+  children,
+  tone,
+}: {
+  children: ReactNode;
+  tone: 'brand' | 'down' | 'neutral';
+}) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+      tone === 'brand' && 'bg-brand-subtle text-brand-subtle-ink',
+      tone === 'down' && 'bg-down-subtle text-down',
+      tone === 'neutral' && 'border border-line bg-sunken text-ink-muted',
+    )}
+  >
+    {children}
+  </span>
+);
 
-  if (isUser) {
+export const ChatMessage = ({ message }: { message: ChatMessageData }) => {
+  if (message.role === 'user') {
     return (
       <div className="flex items-start justify-end gap-2">
-        <div className="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-br-sm bg-accent-green text-white text-sm leading-relaxed whitespace-pre-wrap break-words">
+        {/* `bg-brand text-on-brand`, not the old `bg-accent-green text-white`,
+            which measured 2.28:1 in light mode and 1.74:1 in dark. */}
+        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-brand px-4 py-2.5 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap text-on-brand">
           {message.content}
         </div>
-        <div className="shrink-0 w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center">
-          <User className="w-4 h-4 text-text-secondary" />
-        </div>
+        <Avatar tone="neutral">
+          <User className="h-4 w-4" />
+        </Avatar>
       </div>
     );
   }
 
   return (
     <div className="flex items-start gap-2">
-      <div
-        className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-          message.isError ? 'bg-accent-red/10' : 'bg-accent-green/10'
-        }`}
-      >
+      <Avatar tone={message.isError ? 'down' : 'brand'}>
         {message.isError ? (
-          <AlertCircle className="w-4 h-4 text-accent-red" />
+          <WarningCircle className="h-4 w-4" />
         ) : (
-          <Bot className="w-4 h-4 text-accent-green" />
+          <Robot className="h-4 w-4" />
         )}
-      </div>
+      </Avatar>
 
-      <div className="max-w-[85%] space-y-2">
+      <div className="min-w-0 max-w-[85%] space-y-2">
         <div
-          className={`px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed break-words ${
+          className={cn(
+            'rounded-2xl rounded-tl-sm border px-4 py-2.5 text-sm leading-relaxed wrap-break-word',
             message.isError
-              ? 'bg-accent-red/10 border border-accent-red/20 text-accent-red'
-              : 'bg-secondary border border-border text-text-secondary'
-          }`}
+              ? 'border-down/35 bg-down-subtle text-down'
+              : 'glass text-ink-secondary',
+          )}
         >
           {message.isError ? message.content : renderBlocks(message.content)}
         </div>
@@ -108,32 +127,33 @@ export const ChatMessage: React.FC<{ message: ChatMessageData }> = ({ message })
         {/* The assistant may not state a figure it did not fetch, so show what it
             fetched. This is the user's check on the answer, not decoration. */}
         {message.toolsUsed && message.toolsUsed.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+          <ul className="flex flex-wrap gap-1.5">
             {message.toolsUsed.map((tool, i) => (
-              <span
-                key={`${tool}-${i}`}
-                title="Live data this answer was built from"
-                className="inline-flex items-center max-w-full px-2 py-0.5 rounded-md bg-primary border border-border text-[11px] font-mono text-text-secondary"
-              >
-                <Wrench className="w-3 h-3 mr-1 shrink-0" />
-                <span className="truncate">{tool}</span>
-              </span>
+              <li key={`${tool}-${i}`} className="min-w-0">
+                <span
+                  title="Live data this answer was built from"
+                  className="inline-flex max-w-full items-center gap-1 rounded-sm border border-line bg-card px-2 py-0.5 font-mono text-xs text-ink-muted"
+                >
+                  <Wrench className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{tool}</span>
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
 
         {message.warnings && message.warnings.length > 0 && (
-          <div className="space-y-1">
+          <ul className="space-y-1">
             {message.warnings.map((warning, i) => (
-              <p
+              <li
                 key={`${warning}-${i}`}
-                className="flex items-start text-[11px] text-yellow-600 dark:text-yellow-500"
+                className="flex items-start gap-1 text-xs text-warn"
               >
-                <AlertCircle className="w-3 h-3 mr-1 mt-0.5 shrink-0" />
+                <WarningCircle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
                 <span>{warning}</span>
-              </p>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </div>

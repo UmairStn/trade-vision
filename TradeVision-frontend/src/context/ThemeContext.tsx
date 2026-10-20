@@ -13,7 +13,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('theme');
     if (saved === 'light' || saved === 'dark') return saved;
-    // Default to dark mode based on typical financial app preference, or fallback to system
+    // No stored choice: follow the OS. The inline script in index.html resolves
+    // this the same way before first paint — keep the two in sync.
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
@@ -25,6 +26,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       root.classList.remove('dark');
     }
+    // Follow the in-app toggle, not just the OS setting, so the browser/OS
+    // chrome doesn't disagree with the page.
+    const meta = document.querySelector<HTMLMetaElement>(
+      'meta[name="theme-color"]:not([media])',
+    );
+    if (meta) meta.content = theme === 'dark' ? '#0b0e14' : '#f6f7f9';
   }, [theme]);
 
   const toggleTheme = () => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
