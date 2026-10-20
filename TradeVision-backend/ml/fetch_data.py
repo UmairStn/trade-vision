@@ -1,21 +1,7 @@
 """
-Download CSE price history from Yahoo Finance into ml/data/ for training.
-
-Run from the backend root (PYTHONPATH=/app in Docker):
-    python -m ml.fetch_data                 # fetch everything missing
-    python -m ml.fetch_data --force         # re-download even if present
-    python -m ml.fetch_data --period 10y    # longer history
-    python -m ml.fetch_data JKH.N0000 HNB.N0000   # just these
-
-Writes one CSV per ticker: ml/data/<YAHOO_SYMBOL>.csv with Date + OHLCV.
-
-Deliberately NOT written to fail fast. Yahoo's CSE coverage is uneven, so some
-symbols return nothing and some return a handful of rows. Those are skipped and
-reported in a summary rather than aborting a 50-ticker run on the first miss.
-
-RSI is not stored here. The original CSVs carried pre-computed RSI columns, but
-training now recomputes indicators through services/features.py so that training
-and serving are guaranteed to agree. Raw OHLCV is all that is needed.
+[DEPRECATED / ARCHIVED]
+Historical fetch pipeline — Offline data fetching and preprocessing is now
+managed in the dedicated `CSE-Cross-Stock Trend Analyzer` repository.
 """
 
 import argparse

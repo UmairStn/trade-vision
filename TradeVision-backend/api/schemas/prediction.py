@@ -48,6 +48,17 @@ class PricePredictionBlock(BaseModel):
     model_status: str
 
 
+class HorizonPrediction(BaseModel):
+    horizon_days: int = Field(..., description="Number of trading sessions (1, 7, or 30).")
+    predicted_return: float = Field(..., description="Continuous cumulative return expectation (e.g. 0.0124 for +1.24%).")
+    predicted_percent: float = Field(..., description="Predicted return in percentage terms.")
+    predicted_close: float = Field(..., description="Implied price level based on current close.")
+    direction: str = Field(..., description="Direction derived from sign: UP, DOWN, or FLAT.")
+    confidence: float = Field(..., description="Relative bullishness score (0-100).")
+    directional_accuracy: float | None = Field(None, description="Chronological holdout accuracy from model metadata.")
+    target_definition: str | None = Field(None, description="Definition of the target return horizon.")
+
+
 class TechnicalSummary(BaseModel):
     rsi_3: float | None = None
     sma_3: float | None = None
@@ -66,6 +77,9 @@ class StockAnalysisResponse(BaseModel):
     # Null when the model artifact is absent — the rest of the payload still
     # populates so the endpoint stays testable before the model is dropped in.
     price_prediction: PricePredictionBlock | None = None
+    horizons: dict[str, HorizonPrediction] | None = Field(
+        None, description="Multi-horizon predictions (1d, 7d, 30d)."
+    )
     technical_summary: TechnicalSummary | None = None
     model_status: str = Field(..., description="'loaded' or 'model_not_loaded'.")
     warnings: list[str] = Field(default_factory=list)

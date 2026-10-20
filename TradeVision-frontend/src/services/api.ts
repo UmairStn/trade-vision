@@ -130,6 +130,16 @@ interface ApiAnalysis {
     confidence: number;
     model_status: string;
   } | null;
+  horizons?: Record<string, {
+    horizon_days: number;
+    predicted_return: number;
+    predicted_percent: number;
+    predicted_close: number;
+    direction: 'UP' | 'DOWN' | 'FLAT';
+    confidence: number;
+    directional_accuracy?: number | null;
+    target_definition?: string | null;
+  }> | null;
   model_status: string;
   warnings: string[];
 }
@@ -281,6 +291,38 @@ export const fetchPrediction = async (
     probabilityUpAdjusted: p?.probability_up_adjusted ?? null,
     asOf: data.as_of,
     latestPrice: data.latest_price,
+    horizons: data.horizons ? {
+      '1d': data.horizons['1d'] ? {
+        horizonDays: data.horizons['1d'].horizon_days,
+        predictedReturn: data.horizons['1d'].predicted_return,
+        predictedPercent: data.horizons['1d'].predicted_percent,
+        predictedClose: data.horizons['1d'].predicted_close,
+        direction: data.horizons['1d'].direction,
+        confidence: data.horizons['1d'].confidence,
+        directionalAccuracy: data.horizons['1d'].directional_accuracy,
+        targetDefinition: data.horizons['1d'].target_definition,
+      } : undefined,
+      '7d': data.horizons['7d'] ? {
+        horizonDays: data.horizons['7d'].horizon_days,
+        predictedReturn: data.horizons['7d'].predicted_return,
+        predictedPercent: data.horizons['7d'].predicted_percent,
+        predictedClose: data.horizons['7d'].predicted_close,
+        direction: data.horizons['7d'].direction,
+        confidence: data.horizons['7d'].confidence,
+        directionalAccuracy: data.horizons['7d'].directional_accuracy,
+        targetDefinition: data.horizons['7d'].target_definition,
+      } : undefined,
+      '30d': data.horizons['30d'] ? {
+        horizonDays: data.horizons['30d'].horizon_days,
+        predictedReturn: data.horizons['30d'].predicted_return,
+        predictedPercent: data.horizons['30d'].predicted_percent,
+        predictedClose: data.horizons['30d'].predicted_close,
+        direction: data.horizons['30d'].direction,
+        confidence: data.horizons['30d'].confidence,
+        directionalAccuracy: data.horizons['30d'].directional_accuracy,
+        targetDefinition: data.horizons['30d'].target_definition,
+      } : undefined,
+    } : undefined,
     sentimentScore: data.sentiment_analysis.score,
     sentimentLabel: data.sentiment_analysis.label,
     headlineCount: data.sentiment_analysis.headline_count,
@@ -317,10 +359,13 @@ export const fetchAiAnalysis = async (ticker: string): Promise<AiAnalysisResult>
       );
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error('AI analysis timed out after 5 minutes. Please try again.');
+        throw new Error('AI analysis timed out after 5 minutes. Please try again.', {
+          cause: err,
+        });
       }
       throw new Error(
-        `Cannot reach the TradeVision API at ${API_BASE}. Is the backend running?`
+        `Cannot reach the TradeVision API at ${API_BASE}. Is the backend running?`,
+        { cause: err }
       );
     }
 
@@ -445,7 +490,6 @@ export const fetchPortfolio = async (): Promise<UserPortfolio> => {
   ]);
   
   let totalValue = 0;
-  let totalCost = 0;
   let dayChangeAbs = 0;
   let prevTotalValue = 0;
   
@@ -487,11 +531,9 @@ export const fetchPortfolio = async (): Promise<UserPortfolio> => {
     
     const avgCost = groupShares > 0 ? groupCost / groupShares : 0;
     const itemTotalValue = group.currentPrice * groupShares;
-    const itemTotalCost = groupCost;
     const itemDayChange = group.quoteChange * groupShares;
-    
+
     totalValue += itemTotalValue;
-    totalCost += itemTotalCost;
     dayChangeAbs += itemDayChange;
     prevTotalValue += (group.currentPrice - group.quoteChange) * groupShares;
     
@@ -524,4 +566,57 @@ export const addToPortfolio = async (symbol: string, quantity: number, price: nu
 
 export const removeFromPortfolio = async (id: string): Promise<void> => {
   await request(`/api/v1/portfolio/${id}`, { method: 'DELETE' });
+};
+
+// --- Live CSE Intelligence (Announcements, Company Info, Sectors) ------------
+
+export interface CseAnnouncement {
+  id: number;
+  announcement_id?: number;
+  date: string;
+  category?: string;
+  company?: string;
+  symbol?: string | null;
+  type?: string | null;
+  pdf_url?: string | null;
+  title?: string;
+}
+
+export const fetchAnnouncements = async (
+  type = 'approved',
+  limit = 30
+): Promise<{ type: string; count: number; data: CseAnnouncement[] }> => {
+  return request(`/api/v1/market/announcements?type=${type}&limit=${limit}`);
+};
+
+export interface CompanyInfo {
+  symbol: string;
+  name: string;
+  issue_date?: string | null;
+  logo_url?: string | null;
+  aspi_beta?: number | null;
+  snp_beta?: number | null;
+  beta_period?: string | null;
+}
+
+export const fetchCompanyInfo = async (symbol: string): Promise<CompanyInfo> => {
+  return request(`/api/v1/market/company-info?symbol=${encodeURIComponent(symbol)}`);
+};
+
+export interface SectorItem {
+  id: number;
+  sector_id: number;
+  symbol: string;
+  name: string;
+  index_name: string;
+  index_value: number;
+  change: number;
+  percentage_change: number;
+  volume: number;
+  turnover: number;
+  trades: number;
+}
+
+export const fetchSectors = async (): Promise<{ count: number; sectors: SectorItem[] }> => {
+  return request('/api/v1/market/sectors');
 };

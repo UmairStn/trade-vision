@@ -79,6 +79,17 @@ export interface UserPortfolio {
   dayChangePercent: number;
 }
 
+export interface HorizonDetail {
+  horizonDays: number;
+  predictedReturn: number;
+  predictedPercent: number;
+  predictedClose: number;
+  direction: 'UP' | 'DOWN' | 'FLAT';
+  confidence: number;
+  directionalAccuracy?: number | null;
+  targetDefinition?: string | null;
+}
+
 export interface PredictionResult {
   ticker: string;
   companyName: string;
@@ -92,11 +103,15 @@ export interface PredictionResult {
   probabilityUp: number | null;
   probabilityUpAdjusted: number | null;
 
+  /** Multi-horizon forecasts (1-day, 7-day, 30-day). */
+  horizons?: {
+    '1d'?: HorizonDetail;
+    '7d'?: HorizonDetail;
+    '30d'?: HorizonDetail;
+  };
+
   /**
-   * Date of the price bar the prediction was computed from. This can be months
-   * behind today: Yahoo has stopped updating CSE symbols, and the backend
-   * discards the forward-filled placeholder rows rather than modelling them. The
-   * prediction is for the day after `asOf`, not necessarily tomorrow.
+   * Date of the price bar the prediction was computed from.
    */
   asOf: string | null;
   /** Latest close from the model's feed — NOT the live CSE price. */

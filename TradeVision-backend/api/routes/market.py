@@ -223,3 +223,52 @@ async def market_intraday(
     except CseApiError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     return {"symbol": symbol, "count": len(points), "points": points}
+
+
+@router.get(
+    "/announcements",
+    summary="Live official corporate announcements from the CSE",
+)
+async def market_announcements(
+    type: str = Query(
+        "approved",
+        description="Type of announcement: approved | financial | noncompliance",
+    ),
+    limit: int = Query(30, ge=1, le=100),
+):
+    try:
+        if type == "financial":
+            rows = await run_in_threadpool(cse_api.financial_announcements)
+        elif type == "noncompliance":
+            rows = await run_in_threadpool(cse_api.non_compliance_announcements)
+        else:
+            rows = await run_in_threadpool(cse_api.approved_announcements)
+        return {"type": type, "count": len(rows), "data": rows[:limit]}
+    except CseApiError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@router.get(
+    "/company-info",
+    summary="Company profile with official CDN logo, ASPI Beta, and S&P SL20 Beta",
+)
+async def market_company_info(
+    symbol: str = Query(..., description="CSE ticker.", examples=["JKH.N0000"]),
+):
+    try:
+        info = await run_in_threadpool(cse_api.company_info, symbol)
+        return info
+    except CseApiError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@router.get(
+    "/sectors",
+    summary="All 20+ CSE Industry Group indices with real-time performance",
+)
+async def market_sectors():
+    try:
+        sectors = await run_in_threadpool(cse_api.all_sectors)
+        return {"count": len(sectors), "sectors": sectors}
+    except CseApiError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e

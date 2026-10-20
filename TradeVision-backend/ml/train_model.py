@@ -1,22 +1,13 @@
 """
-XGBoost training — CSE next-day return regressor (cross-sectional).
+[DEPRECATED / ARCHIVED]
+XGBoost training pipeline — Training is now managed in the dedicated
+`CSE-Cross-Stock Trend Analyzer` repository, which generates multi-horizon
+artifacts (1d, 7d, 30d) and metadata.
 
-Train on every CSV in ml/data/ and save the artifact the API loads. All features
-come from services/features.py — the SAME module the serving code uses — so a
-model built here is guaranteed to receive identical inputs in production.
-
-Cross-sectional: there is no Asset_ID in the feature set, so the model learns
-"this pattern of returns/RSI/relative volume implies X return about tomorrow" without
-caring which company produced it. That is what lets it predict ANY CSE ticker,
-including ones never seen in training. The number of files in ml/data/ therefore
-has no effect on which symbols the API can predict — it only changes the volume
-of training data.
-
-Run from the backend root (PYTHONPATH=/app in Docker):
-    python -m ml.train_model
-
-Expects CSVs in ml/data/ (see ml/fetch_data.py) with at least Date, Open, High,
-Low, Close, Volume. Writes models/srilanka_stock_classifier.json.
+The production runtime loads pre-trained artifacts from `models/`:
+  - models/cse_next_day_regressor.json (1-day)
+  - models/cse_next_day_regressor_h7.json (7-day)
+  - models/cse_next_day_regressor_h30.json (30-day)
 """
 
 import glob
@@ -42,6 +33,11 @@ MODEL_OUT = os.getenv(
     "MODEL_OUT", os.path.join(_HERE, "..", "models", "srilanka_stock_classifier.json")
 )
 PLOT_OUT = os.getenv("PLOT_OUT", os.path.join(_HERE, "roc_curve.png"))
+
+# Hard end-of-data cutoff for training (inclusive). Rows dated after this are
+# dropped from the raw CSV BEFORE indicators, lags and the target are computed.
+# Override with TRAIN_END=YYYY-MM-DD once the feed is live again.
+TRAIN_END = pd.Timestamp(os.getenv("TRAIN_END", "2026-01-31"))
 
 TRAIN_SPLIT = 0.8
 
@@ -81,6 +77,13 @@ def load_and_prepare(path: str) -> "pd.DataFrame":
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
 
+    # Cull the dead tail first — the feed is forward-filling ghosts past this
+    # date, and they would poison Return_Lag* features and Target_Return alike.
+    before = len(df)
+    df = df[df["Date"] <= TRAIN_END].reset_index(drop=True)
+    if len(df) < before:
+        print(f"    (cut {before - len(df)} rows after {TRAIN_END:%Y-%m-%d} — dead feed)")
+
     # Identical rule to services/price_data.py, from the same shared function:
     # a bar counts only if it traded. Yahoo forward-fills the CSE feed, and
     # those rows manufacture zero-return observations AND zero-return labels.
@@ -107,6 +110,7 @@ def load_and_prepare(path: str) -> "pd.DataFrame":
 
 def main() -> None:
     print("Step 1: Building features with services/features.py (shared with the API)...")
+    print(f"Training cutoff: {TRAIN_END:%Y-%m-%d} (bars after this are dead feed)\n")
 
     csv_paths = sorted(glob.glob(os.path.join(DATA_DIR, "*.csv")))
     if not csv_paths:

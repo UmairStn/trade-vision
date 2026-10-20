@@ -1,18 +1,19 @@
 """
-Stock prediction engine — XGBoost inference + sentiment blend + price sizing.
+Stock prediction engine — Multi-horizon XGBoost inference (1d, 7d, 30d) + sentiment blend.
 
-The trained artifact is an XGBRegressor: it returns the expected percentage return
-for the next day. The price figures in the API response are derived directly
-from this expected return:
+The trained artifacts are XGBRegressors from the CSE-Cross-Stock Trend Analyzer:
+  * Horizon 1  (1 session, daily): cse_next_day_regressor.json
+  * Horizon 7  (7 sessions, weekly swing): cse_next_day_regressor_h7.json
+  * Horizon 30 (30 sessions, monthly trend): cse_next_day_regressor_h30.json
 
-    expected_return = model.predict(feature_row)[0]
-    expected_return += SENTIMENT_INFLUENCE * sentiment_score
-    predicted   = latest_close * (1 + expected_return)
+Target:
+    Target_Return(t, h) = Close(t + h) / Close(t) - 1
 
-The model has no sentiment input (its feature set is fixed), so the
-blend happens AFTER inference.
+The models have no sentiment input (fixed cross-sectional 11-feature contract),
+so the FinBERT blend is applied to the predicted return based on the horizon scale.
 """
 
+import json
 import os
 
 # pyrefly: ignore [missing-import]
@@ -29,12 +30,32 @@ from services.features import (
 )
 from services.ticker_registry import Ticker
 
-DEFAULT_MODEL_PATH = os.getenv(
-    "MODEL_PATH", os.path.join(os.path.dirname(__file__), "..", "models", "srilanka_stock_classifier.json")
+_MODELS_DIR = os.getenv(
+    "MODELS_DIR", os.path.join(os.path.dirname(__file__), "..", "models")
 )
 
-# How strongly FinBERT sentiment ([-1, 1]) nudges the model's predicted return.
-# 0.005 * score: fully bullish news moves expected return by +0.5%.
+HORIZON_CONFIGS = [
+    {
+        "key": "1d",
+        "days": 1,
+        "model_file": "cse_next_day_regressor.json",
+        "meta_file": "cse_next_day_regressor.metadata.json",
+    },
+    {
+        "key": "7d",
+        "days": 7,
+        "model_file": "cse_next_day_regressor_h7.json",
+        "meta_file": "cse_next_day_regressor.metadata_h7.json",
+    },
+    {
+        "key": "30d",
+        "days": 30,
+        "model_file": "cse_next_day_regressor_h30.json",
+        "meta_file": "cse_next_day_regressor.metadata_h30.json",
+    },
+]
+
+# Baseline sentiment influence for 1-day horizon. Multiplied by sqrt(horizon_days) for longer horizons.
 SENTIMENT_INFLUENCE = float(os.getenv("SENTIMENT_INFLUENCE", "0.005"))
 
 TREND_UP_THRESHOLD = float(os.getenv("TREND_UP_THRESHOLD", "0.002"))
@@ -53,55 +74,78 @@ def _trend_label(p_adjusted: float) -> str:
     return "Neutral"
 
 
+def _direction_label(ret: float) -> str:
+    if ret > 0.001:
+        return "UP"
+    if ret < -0.001:
+        return "DOWN"
+    return "FLAT"
+
+
 class StockPredictionEngine:
-    def __init__(self, model_path: str | None = None):
-        # Resolve relative to the repo root (default path is ../models/...)
-        self.model_path = os.path.abspath(model_path or DEFAULT_MODEL_PATH)
-        self._model = None
+    def __init__(self, models_dir: str | None = None):
+        self.models_dir = os.path.abspath(models_dir or _MODELS_DIR)
+        self._models: dict[str, xgb.XGBRegressor] = {}
+        self._metadata: dict[str, dict] = {}
         self._load_error: str | None = None
-        self._load_model()
+        self._load_models()
 
     # ──────────────────────────────────────────────
     #  Loading
     # ──────────────────────────────────────────────
 
-    def _load_model(self) -> None:
+    def _load_models(self) -> None:
         """
-        Best-effort load. A missing or corrupt artifact must not take the whole
-        API down: the engine records the problem and every later call returns a
-        "model not loaded" result instead of raising.
+        Load all available horizon models (1d, 7d, 30d) and their metadata.
+        Best-effort load: loads what is present without crashing if one is missing.
         """
-        if not os.path.exists(self.model_path):
-            self._load_error = f"Model file not found: {self.model_path}"
-            return
+        self._models.clear()
+        self._metadata.clear()
+        errors = []
 
-        try:
-            # XGBRegressor is the sklearn wrapper the artifact was saved from.
-            model = xgb.XGBRegressor()
-            model.load_model(self.model_path)
-            self._model = model
-        except Exception as e:
-            self._load_error = f"Failed to load model from {self.model_path}: {e}"
-            self._model = None
-            return
+        for conf in HORIZON_CONFIGS:
+            key = conf["key"]
+            model_path = os.path.join(self.models_dir, conf["model_file"])
+            meta_path = os.path.join(self.models_dir, conf["meta_file"])
 
-        self._load_error = None
+            # Load model
+            if os.path.exists(model_path):
+                try:
+                    booster = xgb.XGBRegressor()
+                    booster.load_model(model_path)
+                    self._models[key] = booster
+                except Exception as e:
+                    errors.append(f"Failed to load {key} model ({conf['model_file']}): {e}")
+            else:
+                errors.append(f"Model file missing: {conf['model_file']}")
+
+            # Load metadata
+            if os.path.exists(meta_path):
+                try:
+                    with open(meta_path, "r", encoding="utf-8") as f:
+                        self._metadata[key] = json.load(f)
+                except Exception as e:
+                    print(f"[prediction_engine] Warning: Could not read metadata {conf['meta_file']}: {e}")
+
+        if not self._models:
+            self._load_error = "; ".join(errors) if errors else "No models loaded."
+        else:
+            self._load_error = None
 
     @property
     def is_loaded(self) -> bool:
-        return self._model is not None
+        return len(self._models) > 0
 
     @property
     def load_error(self) -> str | None:
         return self._load_error
 
-    def reload(self, model_path: str | None = None) -> None:
-        """Re-point and reload, so a freshly-added artifact needs no container restart."""
-        if model_path is not None:
-            self.model_path = os.path.abspath(model_path)
-        self._model = None
+    def reload(self, models_dir: str | None = None) -> None:
+        """Re-point and reload all models without server restart."""
+        if models_dir is not None:
+            self.models_dir = os.path.abspath(models_dir)
         self._load_error = None
-        self._load_model()
+        self._load_models()
 
     # ──────────────────────────────────────────────
     #  Inference
@@ -109,60 +153,91 @@ class StockPredictionEngine:
 
     def predict_price(self, ticker: Ticker, sentiment_score: float = 0.0) -> dict:
         """
-        Full prediction for one ticker. Returns the prediction block plus the
-        technical summary the route needs, in a single call.
+        Multi-horizon prediction for one ticker. Returns:
+          - price_prediction: backwards-compatible 1-day block
+          - horizons: dict of { '1d': ..., '7d': ..., '30d': ... }
+          - technical_summary: latest indicators
         """
         if not self.is_loaded:
             return {
                 "price_prediction": None,
+                "horizons": None,
                 "model_status": "model_not_loaded",
                 "model_error": self.load_error,
                 "technical_summary": None,
             }
 
-        # 1. Prices (full history for converging indicators) -> features for the
-        #    LAST row. No company identity is passed: the model is cross-sectional.
         df = price_data.get_prediction_history(ticker)
         feature_row = build_feature_row(df)
         indicators = add_indicators(df)
-
-        # 2. Model: Predicted percentage return for tomorrow.
-        pred_return = float(self._model.predict(feature_row)[0])
-
-        # 3. Sentiment blend (post-hoc — the model has no sentiment feature).
-        expected_return = pred_return + SENTIMENT_INFLUENCE * sentiment_score
-
-        # 4. Volatility context (optional, mainly for deriving a mock 'confidence' score)
-        sigma = realized_volatility(df)
-        if sigma > 0:
-            # Map return to a 0-100 bullishness score: 
-            # expected_return of +sigma -> ~100 confidence
-            mock_bullishness = min(max((expected_return / sigma * 50.0) + 50.0, 0.0), 100.0)
-        else:
-            mock_bullishness = 50.0
-
         latest = price_data.latest_close(df)
-        predicted_close = float(latest * (1.0 + expected_return))
-        change_percent = expected_return * 100.0
-        trend = _trend_label(expected_return)
+        sigma = realized_volatility(df)
 
-        return {
-            "price_prediction": {
+        horizons = {}
+
+        for conf in HORIZON_CONFIGS:
+            key = conf["key"]
+            days = conf["days"]
+            model = self._models.get(key)
+            if model is None:
+                continue
+
+            # Model expected return
+            raw_pred_return = float(model.predict(feature_row)[0])
+
+            # Sentiment blend scaled by horizon time scale
+            scale = float(days ** 0.5)
+            expected_return = raw_pred_return + (SENTIMENT_INFLUENCE * scale) * sentiment_score
+
+            predicted_close = float(latest * (1.0 + expected_return))
+            change_percent = round(expected_return * 100.0, 2)
+            direction = _direction_label(expected_return)
+
+            if sigma > 0:
+                conf_score = min(max((expected_return / sigma * 50.0) + 50.0, 0.0), 100.0)
+            else:
+                conf_score = 50.0
+
+            meta = self._metadata.get(key, {})
+            metrics = meta.get("metrics", {})
+            directional_acc = metrics.get("directional_accuracy")
+
+            horizons[key] = {
+                "horizon_days": days,
+                "predicted_return": round(expected_return, 4),
+                "predicted_percent": change_percent,
                 "predicted_close": round(predicted_close, 4),
-                "change_percent": round(change_percent, 4),
-                "trend": trend,
+                "direction": direction,
+                "confidence": round(conf_score, 2),
+                "directional_accuracy": round(directional_acc * 100.0, 1) if directional_acc else None,
+                "target_definition": meta.get("target_definition"),
+            }
+
+        # Backwards-compatible 1-day prediction block
+        h1 = horizons.get("1d")
+        if h1:
+            price_pred_block = {
+                "predicted_close": h1["predicted_close"],
+                "change_percent": h1["predicted_percent"],
+                "trend": _trend_label(h1["predicted_return"]),
                 "probability_up": None,
                 "probability_up_adjusted": None,
-                "confidence": round(mock_bullishness, 2),
+                "confidence": h1["confidence"],
                 "model_status": "loaded",
-            },
+            }
+        else:
+            price_pred_block = None
+
+        return {
+            "price_prediction": price_pred_block,
+            "horizons": horizons,
             "model_status": "loaded",
             "model_error": None,
             "technical_summary": latest_technicals(indicators),
         }
 
     def feature_row(self, ticker: Ticker) -> dict:
-        """The exact feature vector the model will see, for debugging/parity checks."""
+        """The exact feature vector the models see, for debugging/parity checks."""
         df = price_data.get_prediction_history(ticker)
         row = build_feature_row(df)
         return row.to_dict(orient="records")[0]

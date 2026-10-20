@@ -187,6 +187,7 @@ def analyze_sync(ticker, include_news: bool) -> StockAnalysisResponse:
         latest_price=latest_price,
         sentiment_analysis=sentiment,
         price_prediction=prediction.get("price_prediction"),
+        horizons=prediction.get("horizons"),
         technical_summary=technical_summary,
         model_status=prediction.get("model_status", "unknown"),
         warnings=warnings,

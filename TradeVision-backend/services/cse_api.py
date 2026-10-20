@@ -27,6 +27,7 @@ than corrected, because these strings are the wire protocol:
   * the market totals endpoint is `marketSummery`
   * share volume is `sharevolume` in tradeSummary but `shareVolume` in
     mostActiveTrades
+  * the announcements endpoint wraps its rows in `infoAnnouncement`
 
 Every one of those is mapped in exactly one place below.
 
@@ -35,6 +36,7 @@ All endpoints are POST. A GET returns 405 METHOD_NOT_ALLOWED. The market lists
 take no parameters; the chart endpoint takes a numeric stockId plus a period.
 """
 
+import datetime as _dt
 import os
 import threading
 
@@ -101,6 +103,11 @@ def _post(path: str, **form) -> object:
     request — observed in testing — and every endpoint here is semantically a
     read, so replaying one is safe. Retrying is much cheaper than letting a
     single blip blank a list on the page.
+
+    HTTP 204 (no body) is returned as None rather than raised: it is a success
+    that happens to carry no payload. Only the announcements endpoint emits it
+    today ("no rows for this symbol"); every other caller isinstance-guards
+    the result anyway, so a None there still surfaces as a clean CseApiError.
     """
     url = f"{BASE_URL}/{path}"
     last_error: Exception | None = None
@@ -115,6 +122,9 @@ def _post(path: str, **form) -> object:
             # Anything else (malformed URL, too many redirects) will not fix
             # itself on a replay.
             raise CseApiError(f"CSE request to {path} failed: {e}") from e
+
+        if resp.status_code == 204:
+            return None
 
         if resp.status_code != 200:
             # The upstream error body names the missing parameter, which is the
@@ -463,6 +473,219 @@ def historical_5day(symbol: str) -> list[dict]:
         ]
 
     return _cached(f"historical_5day:{sid}", fetch)
+
+
+def _cse_date(epoch_ms) -> str | None:
+    """
+    Epoch-millis date field to YYYY-MM-DD in Colombo time, None when absent.
+
+    The CSE stamps midnight Sri Lanka time, so converting in the server's local
+    timezone shifts every date by up to a day (a UTC server reads 00:00 +05:30
+    as 18:30 the previous day). Sri Lanka has no DST, so the fixed +05:30
+    offset is exact year-round.
+    """
+    n = _num(epoch_ms, default=0.0)
+    if n <= 0:
+        return None
+    try:
+        tz = _dt.timezone(_dt.timedelta(hours=5, minutes=30))
+        return _dt.datetime.fromtimestamp(n / 1000.0, tz=tz).strftime("%Y-%m-%d")
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def announcements(symbol: str) -> list[dict]:
+    """
+    Corporate-disclosure announcements for one symbol, from the CSE's own API.
+
+    STALE FEED — READ BEFORE WIRING THIS TO ANYTHING. The CSE stopped feeding
+    this endpoint when the site was rebuilt: across every symbol checked the
+    newest announcement is 2019-03-26 (verified 2026-08-27). It is kept for
+    completeness and to demonstrate official-API integration; it must NOT
+    replace the scraper as the FinBERT pipeline's news source.
+
+    Wire contract, verified live:
+      * POST /api/announcements with form field `symbol` — the only endpoint
+        here that takes a name instead of a numeric id.
+      * The match is on the UPPERCASE root prefix: "CDB", "CDB.N0000" and
+        "CDB.X0000" all return the same rows. Lowercase input gets HTTP 204,
+        so the symbol is normalized here before it is sent.
+      * HTTP 204 (no body) means "no announcements", including for symbols the
+        CSE does not know — normalized to an empty list, not an error.
+      * Rows arrive newest-first. `body` is filled only for short
+        announcements; longer ones carry null and a filePath pointing at a PDF.
+      * The PDF archive was not carried over to the current site — every
+        filePath now resolves to HTTP 404. pdf_url is still built so the shape
+        is complete if the CSE ever restores the files.
+
+    Returns one dict per announcement:
+      id, security_id, title, body, date, added_date, pdf_url
+    """
+    key = _normalize(symbol)
+
+    def fetch():
+        payload = _post("announcements", symbol=key)  # None on 204
+        rows = payload.get("infoAnnouncement") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            return []
+
+        out = []
+        for row in rows:
+            if row.get("deleted"):  # upstream soft-deletes; never shown
+                continue
+            file_path = str(row.get("filePath") or "").strip()
+            out.append({
+                "id": int(_num(row.get("announcementId"))),
+                "security_id": int(_num(row.get("securityId"))),
+                "title": str(row.get("title") or "").strip(),
+                "body": (str(row["body"]).strip() or None) if row.get("body") else None,
+                "date": _cse_date(row.get("manualDate")),
+                "added_date": _cse_date(row.get("addedDate")),
+                "pdf_url": f"{BASE_URL.rsplit('/api', 1)[0]}/{file_path}" if file_path else None,
+            })
+        return out
+
+    return _cached(f"announcements:{key}", fetch)
+
+
+def approved_announcements() -> list[dict]:
+    """
+    Live official approved corporate announcements from the CSE.
+    Covers director appointments, dividends, corporate actions, and disclosures.
+    """
+    def fetch():
+        payload = _post("approvedAnnouncement")
+        if not isinstance(payload, dict):
+            return []
+        rows = payload.get("approvedAnnouncements")
+        if not isinstance(rows, list):
+            return []
+        out = []
+        for r in rows:
+            out.append({
+                "id": int(_num(r.get("id"))),
+                "announcement_id": int(_num(r.get("announcementId"))),
+                "date": str(r.get("dateOfAnnouncement") or _cse_date(r.get("createdDate")) or ""),
+                "category": str(r.get("announcementCategory") or "").strip(),
+                "company": str(r.get("company") or "").strip(),
+                "symbol": str(r.get("symbol") or "").strip() or None,
+                "type": r.get("type"),
+            })
+        return out
+
+    return _cached("approved_announcements", fetch)
+
+
+def financial_announcements() -> list[dict]:
+    """
+    Live company quarterly earnings and financial reports with PDF download paths.
+    """
+    def fetch():
+        payload = _post("getFinancialAnnouncement")
+        if not isinstance(payload, dict):
+            return []
+        rows = payload.get("reqFinancialAnnouncemnets")
+        if not isinstance(rows, list):
+            return []
+        out = []
+        for r in rows:
+            path = str(r.get("path") or "").strip()
+            pdf_url = f"https://cdn.cse.lk/{path}" if path else None
+            out.append({
+                "id": int(_num(r.get("id"))),
+                "date": _cse_date(r.get("manualDate")),
+                "pdf_url": pdf_url,
+                "path": path,
+            })
+        return out
+
+    return _cached("financial_announcements", fetch)
+
+
+def non_compliance_announcements() -> list[dict]:
+    """
+    Live non-compliance and penalty notices issued by the exchange.
+    Used for investor risk flagging on securities.
+    """
+    def fetch():
+        payload = _post("getNonComplianceAnnouncements")
+        if not isinstance(payload, dict):
+            return []
+        rows = payload.get("nonComplianceAnnouncements")
+        if not isinstance(rows, list):
+            return []
+        out = []
+        for r in rows:
+            out.append({
+                "id": int(_num(r.get("id"))),
+                "announcement_id": int(_num(r.get("announcementId"))),
+                "created_date": str(r.get("createdDate") or "").strip(),
+                "title": str(r.get("title") or "").strip(),
+                "category": str(r.get("announcementCategory") or "").strip(),
+            })
+        return out
+
+    return _cached("non_compliance_announcements", fetch)
+
+
+def company_info(symbol: str) -> dict:
+    """
+    Official company summary from companyInfoSummery:
+    Returns CDN logo URL, ASPI Beta, S&P SL20 Beta, and official company metadata.
+    """
+    key = _normalize(symbol)
+
+    def fetch():
+        payload = _post("companyInfoSummery", symbol=key)
+        if not isinstance(payload, dict):
+            return {}
+
+        beta_info = payload.get("reqSymbolBetaInfo") or {}
+        logo_info = payload.get("reqLogo") or {}
+        symbol_info = payload.get("reqSymbolInfo") or {}
+
+        logo_path = str(logo_info.get("path") or "").strip()
+        logo_url = f"https://cdn.cse.lk/cmt/{logo_path}" if logo_path else None
+
+        return {
+            "symbol": str(symbol_info.get("symbol") or key),
+            "name": str(symbol_info.get("name") or "").strip(),
+            "issue_date": str(symbol_info.get("issueDate") or "").strip() or None,
+            "logo_url": logo_url,
+            "aspi_beta": _num(beta_info.get("triASIBetaValue")),
+            "snp_beta": _num(beta_info.get("betaValueSPSL")),
+            "beta_period": str(beta_info.get("triASIBetaPeriod") or "").strip() or None,
+        }
+
+    return _cached(f"company_info:{key}", fetch)
+
+
+def all_sectors() -> list[dict]:
+    """
+    All 20+ CSE Industry Group indices with current values, % change, and turnover.
+    """
+    def fetch():
+        payload = _post("allSectors")
+        if not isinstance(payload, list):
+            return []
+        out = []
+        for s in payload:
+            out.append({
+                "id": int(_num(s.get("id"))),
+                "sector_id": int(_num(s.get("sectorId"))),
+                "symbol": str(s.get("symbol") or "").strip(),
+                "name": str(s.get("name") or "").strip(),
+                "index_name": str(s.get("indexName") or "").strip(),
+                "index_value": _num(s.get("indexValue")),
+                "change": _num(s.get("change")),
+                "percentage_change": _num(s.get("percentage")),
+                "volume": _num(s.get("sectorVolumeToday")),
+                "turnover": _num(s.get("sectorTurnoverToday")),
+                "trades": _num(s.get("sectorTradeToday")),
+            })
+        return out
+
+    return _cached("all_sectors", fetch)
 
 
 def clear_cache() -> None:
