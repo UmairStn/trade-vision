@@ -157,4 +157,11 @@ The current frontend uses **mock stock data and simulated AI predictions** while
 
 ---
 
+# 👤 Author
+
+**UmairStn**  
+Email: [umairsulthan828@gmail.com](mailto:umairsulthan828@gmail.com)
+
+---
+
 *TradeVision is continuously evolving as development progresses. Additional features, documentation, and deployment instructions will be added in future updates.*

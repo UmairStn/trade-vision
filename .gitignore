@@ -55,6 +55,10 @@ yarn-error.log*
 TradeVision-backend/ml/data/
 TradeVision-backend/ml/*.png
 TradeVision-backend/ml/model_comparison.csv
-
+EXPLANATION.md
+/.pi
+/plan
 # NOTE: models/*.json is deliberately NOT ignored. The trained artifact must be
 # committed — prod has no bind mount and loads it from inside the image.
+implementation_plan.md
+explanation.md
