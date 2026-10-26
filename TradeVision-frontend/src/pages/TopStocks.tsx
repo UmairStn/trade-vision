@@ -28,7 +28,17 @@ const columns: Column<StockQuote>[] = [
     primary: true,
     mobile: 'title',
     sortBy: (r) => r.ticker,
-    cell: (r) => <span className="font-semibold text-ink">{r.ticker}</span>,
+    cell: (r) => (
+      <div className="flex items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface border border-line font-mono text-[10px] font-bold text-ink-muted"
+        >
+          {r.ticker.split('.')[0].slice(0, 3)}
+        </span>
+        <span className="font-semibold text-ink">{r.ticker}</span>
+      </div>
+    ),
   },
   {
     id: 'name',
@@ -209,7 +219,7 @@ export const TopStocks = () => {
         <SegmentedControl
           label="Filter movers"
           value={list}
-          onChange={setList}
+          onChange={(val) => setList(val as MoverList)}
           options={[
             {
               value: 'gainers',

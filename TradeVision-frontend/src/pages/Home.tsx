@@ -7,6 +7,7 @@ import { PriceChart } from '../components/charts/PriceChart';
 import { useStockContext } from '../context/StockContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { fetchStockHistory } from '../services/api';
+import { SectorHeatmap } from '../components/SectorHeatmap';
 import type { StockPrice } from '../types/stock';
 import { formatCompact, formatInt, formatPrice } from '../lib/format';
 import { cn } from '../lib/cn';
@@ -142,16 +143,15 @@ export const Home = () => {
           <div className="animate-fade-in-up py-20 lg:col-span-6 lg:py-32 lg:pr-12">
             <StatusBadge status={marketSummary?.status} />
             <h1 className="mt-8 text-[3rem] font-medium leading-[1.05] tracking-tight text-ink sm:text-[4rem]">
-              Forecasts for the{' '}
-              <span className="italic">Colombo Stock Exchange</span>,
-              with the workings shown.
+              Multi-horizon intelligence for the{' '}
+              <span className="italic">Colombo Stock Exchange</span>.
             </h1>
             <p
               className="mt-6 max-w-lg text-lg leading-relaxed text-ink-secondary"
               style={{ animationDelay: '80ms' }}
             >
-              Next-day price predictions, live movers, portfolio tracking and an AI
-              research assistant, across every company listed on the CSE.
+              1-day, 7-day swing and 30-day position forecasts powered by cross-sectional
+              XGBoost regressors and live CSE announcement sentiment via FinBERT.
             </p>
             <div
               className="mt-10 flex flex-wrap gap-4"
@@ -342,6 +342,13 @@ export const Home = () => {
           </div>
         </section>
       )}
+
+      {/* ------------------------------------------------------ sector heatmap */}
+      <section aria-labelledby="sectors" className="border-b border-line bg-page">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <SectorHeatmap />
+        </div>
+      </section>
 
       {/* ------------------------------------------------------------- features */}
       {/* ------------------------------------------------------------- features */}

@@ -114,6 +114,7 @@ export interface PredictionResult {
    * Date of the price bar the prediction was computed from.
    */
   asOf: string | null;
+  observationDate?: string | null;
   /** Latest close from the model's feed — NOT the live CSE price. */
   latestPrice: number | null;
 

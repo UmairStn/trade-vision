@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Brain, Calendar, Eye, ArrowSquareOut, Newspaper, ArrowsClockwise, Warning, Sparkle, TrendDown, TrendUp, WifiSlash } from '@phosphor-icons/react';
+import { Brain, Calendar, Eye, ArrowSquareOut, Newspaper, ArrowsClockwise, Warning, Sparkle, TrendDown, TrendUp, WifiSlash, ShieldCheck } from '@phosphor-icons/react';
 import { SymbolSearch } from '../components/SymbolSearch';
 import { PriceChart } from '../components/charts/PriceChart';
 import { Sparkline } from '../components/charts/Sparkline';
@@ -17,6 +17,8 @@ import {
   type RiskFlagsResponse,
   fetchStockHistory,
   fetchStockQuote,
+  fetchCompanyInfo,
+  type CompanyInfo,
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -199,6 +201,24 @@ export const StockAnalyzer = () => {
     };
   }, [ticker]);
 
+  // --- official company info (CDN logo, Beta) -------------------------------
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
+  useEffect(() => {
+    let stale = false;
+    setLogoFailed(false);
+    fetchCompanyInfo(ticker)
+      .then((info) => {
+        if (!stale) setCompanyInfo(info);
+      })
+      .catch(() => {
+        if (!stale) setCompanyInfo(null);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [ticker]);
+
   // A finished deep analysis belongs to one symbol, so it is discarded when the
   // symbol changes — but *not* when the prediction is merely retried.
   useEffect(() => {
@@ -291,7 +311,23 @@ export const StockAnalyzer = () => {
             Stock analyzer
           </>
         }
-        title={quote?.name ?? ticker}
+        title={
+          <div className="flex items-center gap-3">
+            {companyInfo?.logo_url && !logoFailed ? (
+              <img
+                src={companyInfo.logo_url}
+                alt={`${quote?.name ?? ticker} logo`}
+                className="h-10 w-10 shrink-0 rounded-lg object-contain bg-surface border border-line p-1 shadow-sm"
+                onError={() => setLogoFailed(true)}
+              />
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-surface font-mono text-sm font-bold text-ink shadow-sm">
+                {ticker.split('.')[0].slice(0, 3)}
+              </div>
+            )}
+            <span>{quote?.name ?? ticker}</span>
+          </div>
+        }
         description={
           <span className="text-gradient-brand text-h3 font-bold">{ticker}</span>
         }
@@ -459,6 +495,97 @@ export const StockAnalyzer = () => {
           />
         )}
       </section>
+
+      {/* ---------------------------------------------------- beta risk meter */}
+      {companyInfo && (companyInfo.aspi_beta != null || companyInfo.snp_beta != null) && (
+        <section className="mb-16 border-t border-line pt-12">
+          <div className="rounded-2xl border border-line bg-surface/60 p-6 backdrop-blur shadow-sm">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-brand" />
+                  <h3 className="text-h3 font-semibold text-ink">Beta Quantitative Risk Profile</h3>
+                  {companyInfo.beta_period && (
+                    <Badge tone="neutral" size="sm">
+                      {companyInfo.beta_period}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-ink-muted">
+                  Official CSE systematic risk metrics measuring share price sensitivity relative to exchange benchmarks.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4">
+                {/* ASPI Beta Card */}
+                {companyInfo.aspi_beta != null && (
+                  <div className="rounded-xl border border-line bg-card/80 p-3.5 min-w-[140px] text-center">
+                    <p className="font-mono text-[11px] uppercase tracking-wider text-ink-muted">ASPI Beta</p>
+                    <p className="text-2xl font-bold font-mono text-ink mt-1">
+                      {companyInfo.aspi_beta.toFixed(2)}
+                    </p>
+                    <Badge
+                      tone={
+                        companyInfo.aspi_beta < 0.9 ? 'up' : companyInfo.aspi_beta > 1.1 ? 'warn' : 'neutral'
+                      }
+                      size="sm"
+                      className="mt-1.5"
+                    >
+                      {companyInfo.aspi_beta < 0.9 ? 'Defensive (< 1.0)' : companyInfo.aspi_beta > 1.1 ? 'High Beta (> 1.0)' : 'Market (~ 1.0)'}
+                    </Badge>
+                  </div>
+                )}
+
+                {/* S&P SL20 Beta Card */}
+                {companyInfo.snp_beta != null && (
+                  <div className="rounded-xl border border-line bg-card/80 p-3.5 min-w-[140px] text-center">
+                    <p className="font-mono text-[11px] uppercase tracking-wider text-ink-muted">S&P SL20 Beta</p>
+                    <p className="text-2xl font-bold font-mono text-ink mt-1">
+                      {companyInfo.snp_beta.toFixed(2)}
+                    </p>
+                    <Badge
+                      tone={
+                        companyInfo.snp_beta < 0.9 ? 'up' : companyInfo.snp_beta > 1.1 ? 'warn' : 'neutral'
+                      }
+                      size="sm"
+                      className="mt-1.5"
+                    >
+                      {companyInfo.snp_beta < 0.9 ? 'Defensive (< 1.0)' : companyInfo.snp_beta > 1.1 ? 'High Beta (> 1.0)' : 'Market (~ 1.0)'}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Visual Risk Gauge Track */}
+            {companyInfo.aspi_beta != null && (
+              <div className="mt-6 pt-5 border-t border-line/60">
+                <div className="flex justify-between text-xs font-mono text-ink-muted mb-2">
+                  <span className="text-emerald-500 font-medium">Defensive (&lt; 1.0)</span>
+                  <span className="text-slate-400 font-medium">Market Benchmark (1.0)</span>
+                  <span className="text-amber-500 font-medium">High Volatility / Aggressive (&gt; 1.0)</span>
+                </div>
+                <div className="relative h-3 w-full rounded-full bg-surface-muted overflow-hidden flex ring-1 ring-line">
+                  <div className="w-1/3 bg-emerald-500/20 border-r border-emerald-500/30" title="Defensive" />
+                  <div className="w-1/3 bg-slate-500/20 border-r border-slate-500/30" title="Market Benchmark" />
+                  <div className="w-1/3 bg-amber-500/20" title="High Beta" />
+                  {/* Indicator marker */}
+                  <div
+                    className="absolute top-0 bottom-0 w-2 -ml-1 rounded-full bg-brand shadow-md ring-2 ring-page transition-all duration-500"
+                    style={{
+                      left: `${Math.min(Math.max((companyInfo.aspi_beta / 2.0) * 100, 2), 98)}%`,
+                    }}
+                    title={`ASPI Beta: ${companyInfo.aspi_beta}`}
+                  />
+                </div>
+                <p className="mt-2 text-right font-mono text-[11px] text-ink-muted">
+                  Position indicates ASPI beta of {companyInfo.aspi_beta.toFixed(2)} relative to 0.0 – 2.0 scale
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ------------------------------------------------------------ prediction */}
       <section className="mb-16 border-t border-line pt-12">
@@ -681,7 +808,11 @@ export const StockAnalyzer = () => {
                 <div className="mt-6 rounded-lg bg-surface-muted/40 border border-line/50 p-3 text-xs text-ink-muted flex items-start gap-2">
                   <Brain className="h-4 w-4 text-brand shrink-0 mt-0.5" />
                   <p>
-                    <strong>Research Screener:</strong> Multi-horizon cross-sectional XGBoost regressor evaluated against a zero-return baseline. Outputs are probabilistic estimates, not financial advice.
+                    <strong>Research Screener:</strong> Multi-horizon cross-sectional screener. Benchmarked against zero-return baseline. Data as of{' '}
+                    <span className="font-mono font-medium text-ink">
+                      {prediction.observationDate ? formatDate(prediction.observationDate) : prediction.asOf ? formatDate(prediction.asOf) : 'latest session'}
+                    </span>
+                    . Outputs are probabilistic estimates, not financial advice.
                   </p>
                 </div>
 

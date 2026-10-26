@@ -47,6 +47,13 @@ export const StockCard = ({
         </span>
       )}
 
+      <span
+        aria-hidden="true"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface border border-line/80 font-mono text-[11px] font-bold text-ink-secondary"
+      >
+        {quote.ticker.split('.')[0].slice(0, 3)}
+      </span>
+
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-ink">
           {quote.ticker}

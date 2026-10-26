@@ -39,6 +39,7 @@ import type { Column } from '../components/ui';
 import { AddPositionModal } from '../components/dashboard/AddPositionModal';
 import { AddWatchlistModal } from '../components/dashboard/AddWatchlistModal';
 import { HoldingDetailsModal } from '../components/dashboard/HoldingDetailsModal';
+import { SectorHeatmap } from '../components/SectorHeatmap';
 
 /**
  * The dashboard.
@@ -534,6 +535,8 @@ const Overview = ({
           empty={<WatchlistEmpty onAddWatchlist={onAddWatchlist} />}
         />
       </Card>
+
+      <SectorHeatmap compact />
     </div>
   );
 };

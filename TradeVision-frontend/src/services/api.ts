@@ -114,6 +114,7 @@ interface ApiAnalysis {
   symbol: string;
   company_name: string;
   as_of: string | null;
+  observation_date?: string | null;
   latest_price: number | null;
   sentiment_analysis: {
     score: number;
@@ -290,6 +291,7 @@ export const fetchPrediction = async (
     probabilityUp: p?.probability_up ?? null,
     probabilityUpAdjusted: p?.probability_up_adjusted ?? null,
     asOf: data.as_of,
+    observationDate: data.observation_date || data.as_of,
     latestPrice: data.latest_price,
     horizons: data.horizons ? {
       '1d': data.horizons['1d'] ? {
