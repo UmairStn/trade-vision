@@ -136,23 +136,43 @@ def analyze_sync(ticker, include_news: bool) -> StockAnalysisResponse:
         sentiment = dict(_NEUTRAL_SENTIMENT)
 
     # 3. Price prediction, nudged by the sentiment score.
+    #    Prediction-path failures degrade to a null block + warning (HTTP 200)
+    #    instead of raising: sentiment and latest price are INDEPENDENT services
+    #    and must still return when XGBoost can't (model_not_loaded already
+    #    worked this way — this extends the same rule to data/history failures).
     engine = get_engine()
+
+    def _failed_prediction(status: str, error: str) -> dict:
+        return {
+            "observation_date": None,
+            "price_prediction": None,
+            "horizons": None,
+            "model_status": status,
+            "model_error": error,
+            "technical_summary": None,
+            "feature_warnings": [],
+        }
+
     try:
         prediction = engine.predict_price(ticker, float(sentiment["score"]))
     except PriceDataError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        prediction = _failed_prediction("price_data_error", str(e))
     except InsufficientHistoryError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+        prediction = _failed_prediction("insufficient_history", str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Prediction failed for {ticker.symbol}: {e}"
-        ) from e
+        prediction = _failed_prediction(
+            "prediction_failed", f"Prediction failed for {ticker.symbol}: {e}"
+        )
 
     if prediction.get("model_status") != "loaded":
         warnings.append(
             prediction.get("model_error")
             or "Prediction model is not loaded; price_prediction is null."
         )
+
+    # Serving contract §5 — out-of-distribution feature values (the prediction
+    # is still returned; these add context, they do not suppress).
+    warnings.extend(prediction.get("feature_warnings") or [])
 
     # 4. Latest price. Cached from the prediction call, so this is not a refetch.
     #    When the model is missing there was no prediction call, so fetch here to
@@ -175,15 +195,16 @@ def analyze_sync(ticker, include_news: bool) -> StockAnalysisResponse:
         if technical_summary is None:
             from services.features import add_indicators, latest_technicals
             technical_summary = latest_technicals(add_indicators(df))
-    except PriceDataError as e:
-        if prediction.get("model_status") == "loaded":
-            raise HTTPException(status_code=502, detail=str(e)) from e
+    except (PriceDataError, InsufficientHistoryError) as e:
+        # Degraded, never raised: a dead/short feed must not discard the
+        # sentiment (and possibly prediction) blocks that already succeeded.
         warnings.append(f"Price data unavailable: {e}")
 
     return StockAnalysisResponse(
         symbol=ticker.symbol,
         company_name=ticker.name,
         as_of=as_of,
+        observation_date=prediction.get("observation_date") or as_of,
         latest_price=latest_price,
         sentiment_analysis=sentiment,
         price_prediction=prediction.get("price_prediction"),
@@ -192,6 +213,42 @@ def analyze_sync(ticker, include_news: bool) -> StockAnalysisResponse:
         model_status=prediction.get("model_status", "unknown"),
         warnings=warnings,
     )
+
+
+@router.get(
+    "/risk-flags",
+    summary="Active non-compliance and regulatory risk notices for a symbol",
+)
+async def get_risk_flags(
+    symbol: str = Query(..., description="CSE ticker (e.g. JKH.N0000)"),
+):
+    from services import cse_api
+    from services.cse_api import CseApiError
+    from services.ticker_registry import _normalize
+
+    norm = _normalize(symbol)
+    base_sym = norm.split(".")[0]
+
+    try:
+        notices = await run_in_threadpool(cse_api.non_compliance_announcements)
+    except CseApiError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    matches = []
+    for n in notices:
+        title = (n.get("title") or "").upper()
+        cat = (n.get("category") or "").upper()
+        if base_sym in title or base_sym in cat or norm in title:
+            item_n = dict(n)
+            item_n["label"] = item_n.get("title") or "Non-Compliance Notice"
+            matches.append(item_n)
+
+    return {
+        "symbol": symbol,
+        "has_risk": len(matches) > 0,
+        "notice_count": len(matches),
+        "notices": matches,
+    }
 
 
 @router.get(

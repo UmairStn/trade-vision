@@ -72,6 +72,7 @@ class StockAnalysisResponse(BaseModel):
     symbol: str
     company_name: str
     as_of: str | None = Field(None, description="Date of the latest price bar (YYYY-MM-DD).")
+    observation_date: str | None = Field(None, description="Date of observation for multi-horizon forecast (YYYY-MM-DD).")
     latest_price: float | None = None
     sentiment_analysis: SentimentBlock
     # Null when the model artifact is absent — the rest of the payload still
