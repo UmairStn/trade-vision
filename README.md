@@ -1,167 +1,171 @@
 # TradeVision 📈
 
-> 🚧 **Work in Progress** — This project is currently under active development. Core features are being implemented, and additional AI capabilities are continuously being integrated.
+> **Under active development** — built as a 4th-year capstone project.
 
-TradeVision is a modern, responsive web application for analyzing and predicting trends in the **Colombo Stock Exchange (CSE)**. It combines interactive market visualization with AI-powered stock predictions to help investors better understand market movements and make more informed decisions.
+TradeVision is a web application for analyzing stocks listed on the **Colombo Stock Exchange (CSE)**. It pairs interactive market charts with AI-powered price predictions, a natural-language chatbot, and a personal portfolio tracker — all in one place.
 
-*This project is being developed as a 4th-year capstone project.*
-
----
-
-# Overview
-
-The Colombo Stock Exchange (CSE) can be volatile and difficult to navigate for individual investors and casual traders. Existing platforms often lack modern, user-friendly interfaces, real-time interactive analysis tools, and accessible predictive insights. Traders struggle to quickly identify trends, manage their portfolios efficiently, and access AI-driven predictions without relying on complex, enterprise-grade software.
-
-TradeVision bridges this gap by providing an intuitive, accessible platform tailored for the CSE. It combines technical market analysis with AI-driven insights in a clean, responsive interface designed for both new and experienced investors.
+Most CSE tools are dated, hard to use, or aimed at enterprise users. TradeVision is designed for everyday investors: clean interface, live market data from the CSE API, and AI insights explained in plain language.
 
 ---
 
-# Problem Statement
+## What can it do?
 
-Traditional stock prediction models often rely solely on historical price data, which has limited predictive power in many financial markets. Market sentiment from financial news can significantly influence price movements before they appear in technical indicators.
-
-TradeVision addresses this challenge by combining multiple sources of information to provide richer, more informed market insights rather than relying on technical analysis alone.
-
----
-
-# Solution
-
-TradeVision empowers users with:
-
-- 📈 **Simplified Analysis** – Interactive charts that make market trends easy to understand.
-- 🤖 **AI-Powered Predictions** – Estimated next-day price movements with confidence scores.
-- 💬 **Intelligent Chatbot** – Ask questions about stocks using natural language.
-- 📊 **Portfolio Dashboard** – Track holdings, daily P&L, and watchlists in one place.
-- 📉 **Market Overview** – View top gainers, losers, and most active stocks.
-- 🌙 **Dynamic Theme System** – Seamless Light/Dark mode experience.
+| Feature | What you get |
+|---|---|
+| **📊 Stock Analyzer** | Search any CSE-listed company, view an interactive price chart, and see an AI prediction for the next day, week, and month with confidence scores and risk flags. |
+| **💬 AI Chatbot** | Ask questions in plain English — *"What's the price of JKH?"*, *"Which stocks are gaining today?"* — and get answers from real market data, not guesses. |
+| **📈 Portfolio Dashboard** | Add your holdings, track profit & loss, and maintain a watchlist. Saved to your account. |
+| **🌍 Market Overview** | Top gainers, top losers, most active stocks, the ASPI, and a sector heatmap. |
+| **📰 News Hub** | CSE corporate announcements with AI sentiment scoring and non-compliance risk notices. |
+| **🎨 Modern UI** | Fully responsive with light/dark mode. |
 
 ---
 
-# ✨ Key Features
+## How the AI works 🧠
 
-### 📊 Stock Analyzer
-- Search and analyze CSE-listed stocks.
-- Interactive area charts for historical price visualization.
-- Technical trend analysis.
+Stock prediction is hard, and price data alone only tells part of the story. TradeVision combines two signals:
 
-### 🤖 AI Prediction Engine
-- Estimated next-day stock price prediction.
-- Prediction confidence scores.
-- Combines technical indicators with financial news sentiment.
+```
+                 ┌─────────────────────┐
+   Historical ───►  XGBoost model      │
+   prices &       │ (1-day / 7-day /   ├──┐
+   volume         │  30-day horizons)  │  │
+                 └─────────────────────┘  │    ┌──────────┐      ┌────────────┐
+                                          ├───►│  Fusion  │──────► Prediction │
+                 ┌─────────────────────┐  │    │  model   │      │ + confidence│
+   Financial  ──►│ FinBERT sentiment   ├──┘    └──────────┘      └────────────┘
+   news           │ analysis           │
+                 └─────────────────────┘
+```
 
-### 💬 AI Chatbot
-- Natural language interface for stock-related questions.
-- Uses Gemini function calling to retrieve real prediction data.
-- Provides grounded responses instead of generated guesses.
+1. **Technical signal** — XGBoost models predict expected returns for three horizons (1 day, 7 days, 30 days), trained on historical CSE price and volume data. The models are *cross-sectional*, meaning they compare stocks against each other on the same day, so they work for any CSE ticker.
+2. **Sentiment signal** — FinBERT (a finance-tuned language model) reads CSE corporate announcements and scores them as positive, negative, or neutral.
+3. **Fusion** — the sentiment score adjusts the technical prediction, producing a final estimate with a confidence score.
 
-### 📈 Portfolio Dashboard
-- Track investments.
-- Monitor daily profit & loss.
-- Maintain a personalized watchlist.
+### The chatbot isn't "making things up"
 
-### 🌍 Market Overview
-- Top gainers.
-- Top losers.
-- Most active stocks.
-
-### 🎨 Modern UI
-- Responsive design.
-- Light/Dark mode.
-- Built with modern React architecture.
+The chatbot runs on **Google Gemini** using function calling. When you ask a question, Gemini picks from a set of real backend tools (get quote, get analysis, list gainers, etc.), the backend executes them against live data, and Gemini explains the actual result in natural language. If Gemini is unavailable, it falls back to **DeepSeek**.
 
 ---
 
-# 🏗️ System Architecture
-
-TradeVision combines several components into a unified prediction platform:
-
-- **Technical Prediction** – XGBoost model trained on historical stock prices and trading volume.
-- **News Sentiment Analysis** – FinBERT analyzes financial news to determine market sentiment.
-- **Fusion Model** – Combines technical and sentiment signals into a final prediction.
-- **Ticker Resolution** – Maps company names found in news articles to CSE ticker symbols.
-- **Backend API** – Serves predictions, analytics, and chatbot responses.
-- **Caching Layer** – Reduces redundant model inference and external API calls for improved performance.
-
----
-
-# 💬 Chatbot Design
-
-The chatbot uses **Google Gemini's function-calling** capabilities to answer questions using real backend data instead of generating speculative responses.
-
-Examples:
-
-- **"What is the current price of JKH?"**
-  - Retrieves the latest stock price from the backend.
-
-- **"Will JKH increase tomorrow?"**
-  - Calls the prediction service, combining:
-    - XGBoost technical prediction
-    - FinBERT sentiment analysis
-
-Gemini interprets user intent, invokes the appropriate backend function, and converts structured results into natural language responses.
-
----
-
-# 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
-|--------|------------|
-| **Frontend** | React 19, TypeScript |
-| **Build Tool** | Vite (Rolldown/SWC) |
-| **Styling** | Tailwind CSS v4 |
-| **Charts** | Recharts |
-| **Technical Prediction** | XGBoost (Python) |
-| **Sentiment Analysis** | FinBERT (Python) |
-| **Chatbot** | Google Gemini (Function Calling) |
-| **Backend** | Python |
-| **Containerization** | Docker & Nginx |
+|---|---|
+| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4, Recharts, Radix UI |
+| **Backend** | Python 3.11, FastAPI |
+| **Machine Learning** | XGBoost, FinBERT (Hugging Face Transformers) |
+| **LLM** | Google Gemini (function calling), DeepSeek (fallback) |
+| **Database** | PostgreSQL via Supabase (auth + portfolio storage) |
+| **Market Data** | CSE API (live), Yahoo Finance (historical training data) |
+| **Deployment** | Docker, Docker Compose, Nginx |
 
 ---
 
-# 📌 Project Status
+## Getting Started
 
-| Component | Status |
-|-----------|--------|
-| Frontend Dashboard | 🚧 In Progress |
-| Stock Analyzer | 🚧 In Progress |
-| Portfolio Dashboard | 🚧 In Progress |
-| AI Prediction Engine | 🚧 In Progress |
-| FinBERT Sentiment Analysis | 🚧 In Progress |
-| Fusion Prediction Model | 🚧 In Progress |
-| Gemini Chatbot | 🚧 In Progress |
-| Backend API | 🚧 In Progress |
+Both apps run independently. Docker is the recommended way to run them.
+
+### 1. Backend
+
+```bash
+cd TradeVision-backend
+docker compose -f docker/docker-compose.yml up -d --build backend-dev
+```
+
+API starts at **http://localhost:8000** — interactive docs at `/docs`.
+
+### 2. Frontend
+
+```bash
+cd TradeVision-frontend
+docker compose -f docker/docker-compose.yml up -d --build frontend-dev
+```
+
+App starts at **http://localhost:5173**.
+
+### 3. Configuration (optional)
+
+Everything works out of the box for market data and predictions. To enable the AI features, create `.env` files from the provided examples:
+
+**`TradeVision-backend/.env`**
+
+| Variable | Purpose |
+|---|---|
+| `GEMINI_API_KEY` | Enables the chatbot |
+| `AI_ANALYSIS_API_KEY` | Enables DeepSeek deep analysis & chatbot fallback |
+| `SUPABASE_JWT_SECRET` | Verifies login tokens |
+| `SUPABASE_DB_URL` | Database connection for portfolio/watchlist |
+
+**`TradeVision-frontend/.env`**
+
+| Variable | Purpose |
+|---|---|
+| `VITE_API_URL` | Backend address (default `http://localhost:8000`) |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Enables login & saved portfolios |
+| `VITE_AI_ANALYSIS_ENABLED` | Unlocks the "AI deep analysis" button |
+
+> Without API keys the app still runs — the chatbot simply disables itself.
 
 ---
 
-# 🗺️ Roadmap
+## Project Structure
 
-- [x] Complete XGBoost prediction pipeline
-- [x] Integrate FinBERT sentiment analysis
-- [x] Finalize fusion prediction model
-- [x] Implement ticker resolution
-- [x] Complete backend API
-- [x] Finish portfolio dashboard
-- [ ] Complete chatbot integration
-- [ ] End-to-end testing using live CSE data
-- [ ] Deploy production version
+```
+TradeVision/
+├── TradeVision-frontend/     React SPA
+│   └── src/
+│       ├── pages/            Home, Analyzer, Dashboard, News, Chat, Auth…
+│       ├── components/       Charts, chat widget, dashboard, UI kit
+│       ├── context/          Theme, stock data, chat, auth state
+│       └── services/         Backend API client
+│
+└── TradeVision-backend/      FastAPI service
+    ├── api/                  App, routes, schemas
+    ├── services/             Prediction, sentiment, chat, CSE API, caching
+    ├── models/               Trained XGBoost artifacts (committed)
+    ├── ml/                   Training/evaluation scripts (legacy)
+    ├── db/                   Database models
+    └── docker/               Dockerfile + compose files
+```
+
+### API Endpoints
+
+All routes live under `/api/v1`:
+
+| Endpoint | Description |
+|---|---|
+| `GET /stocks/analyze` | Prediction for a ticker (1d / 7d / 30d + sentiment) |
+| `GET /market/summary` | Gainers, losers, most active, ASPI |
+| `GET /market/quote`, `/history`, `/symbols` | Quotes, price history, full ticker list |
+| `GET /market/announcements`, `/sectors` | CSE announcements and sector indices |
+| `GET /news/feed`, `/news/risk-flags` | Sentiment-scored news and risk notices |
+| `POST /chat` | Gemini chatbot with function calling |
+| `GET/POST/DELETE /watchlist/*`, `/portfolio/*` | Per-user portfolio (requires login) |
 
 ---
 
-# ⚠️ Disclaimer
+## Roadmap
 
-This application is currently a **prototype** developed for educational and research purposes.
-
-The current frontend uses **mock stock data and simulated AI predictions** while backend AI services are under development. Predictions and market information **should not be used for actual financial trading or investment decisions**.
-
----
-
----
-
-# 👤 Author
-
-**UmairStn**  
-Email: [umairsulthan828@gmail.com](mailto:umairsulthan828@gmail.com)
+- [x] XGBoost multi-horizon prediction pipeline
+- [x] FinBERT news sentiment analysis
+- [x] Fusion model
+- [x] Backend API
+- [x] Portfolio & watchlist dashboard
+- [x] Gemini chatbot with function calling
+- [ ] Automated end-to-end tests against live CSE data
+- [ ] Production deployment
 
 ---
 
-*TradeVision is continuously evolving as development progresses. Additional features, documentation, and deployment instructions will be added in future updates.*
+## ⚠️ Disclaimer
+
+TradeVision is an **educational prototype** built for research purposes. Predictions are AI-generated estimates, not financial advice. Do **not** use this application for actual trading or investment decisions.
+
+---
+
+## 👤 Author
+
+**UmairStn** · [umairsulthan828@gmail.com](mailto:umairsulthan828@gmail.com)
+
+TradeVision is under continuous development. Deployment docs and further improvements are on the way.
