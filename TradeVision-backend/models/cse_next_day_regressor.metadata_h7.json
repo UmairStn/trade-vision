@@ -2,7 +2,7 @@
   "model_type": "XGBoost cumulative return regressor",
   "horizon_days": 7,
   "target_definition": "Close(t + 7) / Close(t) - 1 over the next 7 trading session(s)",
-  "created_at_utc": "2026-09-08T15:02:37.270336+00:00",
+  "created_at_utc": "2026-10-23T15:58:29.954547+00:00",
   "train_end": "2026-01-31",
   "features": [
     "Open_Pct",
@@ -17,8 +17,8 @@
     "MACD_Pct",
     "MACD_Hist_Pct"
   ],
-  "training_rows": 41555,
-  "test_rows": 10511,
+  "training_rows": 42784,
+  "test_rows": 10811,
   "assets": [
     "AAIC-N0000.CM",
     "ACL-N0000.CM",
@@ -75,11 +75,11 @@
     "WATA-N0000.CM"
   ],
   "metrics": {
-    "mae": 0.04024469831707042,
-    "mse": 0.0031967808687652795,
-    "r2": -0.048124705464423156,
-    "directional_accuracy": 0.5627437922176767,
-    "zero_return_baseline_mae": 0.03950537987638806
+    "mae": 0.03921466480140224,
+    "mse": 0.0030849168608220712,
+    "r2": -0.019689791003285606,
+    "directional_accuracy": 0.5756174266950328,
+    "zero_return_baseline_mae": 0.03925239012701546
   },
   "hyperparameters": {
     "objective": "reg:squarederror",
@@ -122,5 +122,78 @@
     "tree_method": null,
     "validate_parameters": null,
     "verbosity": null
-  }
+  },
+  "min_bars_required": 5,
+  "feature_engineering": "trailing 5-bar slice via build_feature_row (same code as serving)",
+  "feature_ranges": {
+    "Open_Pct": {
+      "p1": -0.08687175752752116,
+      "p50": 0.0,
+      "p99": 0.07589782528286547
+    },
+    "High_Pct": {
+      "p1": -0.0033241417497231573,
+      "p50": 0.015228387078284777,
+      "p99": 0.10442254939811421
+    },
+    "Low_Pct": {
+      "p1": -0.09760903121608251,
+      "p50": -0.009615384615384581,
+      "p99": 0.01975588068336949
+    },
+    "Rel_Volume": {
+      "p1": 0.004915769378066948,
+      "p50": 0.8826227716259178,
+      "p99": 2.8947897478379945
+    },
+    "RSI_3": {
+      "p1": 0.0,
+      "p50": 50.0,
+      "p99": 100.0
+    },
+    "Return_Lag1": {
+      "p1": -0.07028094332462627,
+      "p50": 0.0,
+      "p99": 0.09513642799867487
+    },
+    "Return_Lag2": {
+      "p1": -0.07028094332462627,
+      "p50": 0.0,
+      "p99": 0.09513642799867487
+    },
+    "SMA_3_Pct": {
+      "p1": -0.06613030841614251,
+      "p50": 0.0,
+      "p99": 0.05762515127199403
+    },
+    "EMA_3_Pct": {
+      "p1": -0.04970722045847048,
+      "p50": 0.00023599321933354123,
+      "p99": 0.044119877407608074
+    },
+    "MACD_Pct": {
+      "p1": -0.025602364786393498,
+      "p50": -4.8754651715685136e-05,
+      "p99": 0.028703060258014598
+    },
+    "MACD_Hist_Pct": {
+      "p1": -0.007919911700047239,
+      "p50": -2.9983818612228243e-05,
+      "p99": 0.008844867983145247
+    }
+  },
+  "feature_importances": {
+    "Open_Pct": 0.07823768258094788,
+    "High_Pct": 0.08710664510726929,
+    "Low_Pct": 0.09611146152019501,
+    "Rel_Volume": 0.08547806739807129,
+    "RSI_3": 0.07163061201572418,
+    "Return_Lag1": 0.08226080238819122,
+    "Return_Lag2": 0.08866790682077408,
+    "SMA_3_Pct": 0.09779173880815506,
+    "EMA_3_Pct": 0.10911345481872559,
+    "MACD_Pct": 0.10579193383455276,
+    "MACD_Hist_Pct": 0.0978097915649414
+  },
+  "feature_ablation_report": "C:\\Project\\CSE-Cross-Stock Trend Analyzer\\reports\\generated\\feature_ablation_h7.json"
 }

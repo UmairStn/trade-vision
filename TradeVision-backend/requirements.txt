@@ -8,9 +8,8 @@ PyJWT
 # which adds ~628MB of CUDA libraries that a CPU-only deployment never loads.
 # Same `import xgboost` API. Switch back only if you move to GPU training.
 #
-# Pinned because the same version must both TRAIN the model (ml/train_model.py)
-# and LOAD it at serve time. An unpinned rebuild could resolve to a different
-# major and fail to load an artifact trained earlier — in production.
+# Pinned to match the model training artifacts (1d, 7d, 30d regressors)
+# and guarantee stable prediction serving at runtime.
 #
 # 3.2.* is the ceiling for this image: xgboost-cpu 3.3+ requires Python >=3.12
 # and the base image is python:3.11-slim. Raising this pin means bumping the
@@ -25,8 +24,7 @@ playwright
 pandas
 numpy
 yfinance
-# XGBClassifier is the sklearn wrapper, so loading the trained artifact with
-# the same class it was saved from requires scikit-learn at runtime.
+# XGBRegressor compatibility for model metadata and array transformations.
 scikit-learn
 # Gemini, for the AI chat (services/gemini_chat.py). The `google-genai` package,
 # NOT the deprecated `google-generativeai` — the two have different import paths

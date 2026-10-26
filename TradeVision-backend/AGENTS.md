@@ -105,15 +105,26 @@ which is why the volume/return checks have no boundary blind spot.
 
 ### The serving side — CSE short-memory
 
-`get_prediction_history()` maps `companyChartDataByStock` (period=7 → the last ~5
-daily bars) onto OHLCV:
+`get_prediction_history()` feeds `companyChartDataByStock` (period=7 → the last ~5
+daily bars) through `features.cse_payload_to_ohlcv()` — the serving contract's
+single ingestion entry point (training-side hygiene, identically applied):
 
-- `price` → Close, `high` → High, `low` → Low, `quantity` → Volume
-- **Open is not in the CSE payload — approximated as the previous Close** (first
-  bar: its own close). See known limitations for the measured effect.
-- `drop_non_trading_rows()` runs here too — the same shared function as training.
-- `MIN_ROWS = 4`: every feature window is ≤ 3, deliberately sized so 5 CSE bars
-  are enough.
+- `p` → Close, `h` → High, `l` → Low, `q` → Volume, `t` → trade date (Colombo).
+- **Open is synthesized as `Close(t-1)`** by `prepare_ohlcv()` — the CSE payload
+  has no open (`o` is always null). Training uses the same convention.
+- Invalid bars are rejected (never clamped), duplicates collapse, zero-volume
+  bars drop, and **today's still-open session is dropped** (override:
+  `PREDICT_FROM_OPEN_SESSION=1` for demos/replays only).
+- **`MIN_ROWS = 3`, `SLICE_BARS = 5`**: the serving contract's ideal input is one
+  full 5-bar slice, but thinly traded counters can have fewer completed bars in
+  the feed's ~5-day window (e.g. TANG didn't trade 2 of the last 5 sessions).
+  At 3–4 completed bars the prediction still runs, in **degraded warm-up mode**:
+  features that don't exist on a short history (`Return_Lag2` needs 4 closes) are
+  neutral-filled, RSI uses the available changes, EMAs are seeded shorter — and
+  `prediction_engine` attaches an explicit `feature_warnings` entry saying so.
+  Below 3 → `InsufficientHistoryError`, never a guess. While a session is open
+  (today's bar dropped) a stock that traded all 5 sessions lands at 4 bars and
+  still predicts, degraded.
 - `df.attrs["stale_days"]` → the route warns when the newest bar is more than
   `STALE_AFTER_DAYS` (7) behind today.
 
@@ -127,10 +138,17 @@ as an argument to probe the live feed too.
 ## THE MODEL CONTRACT — read this before touching features
 
 [services/features.py](services/features.py) is the **single source of truth** for
-feature engineering. Both `ml/train_model.py` and `services/prediction_engine.py`
-import `FEATURE_COLUMNS` from it. This is deliberate: if training and serving computed
-features independently they would drift, and a drifted feature produces a confident,
-plausible, **wrong** prediction that nothing else in the stack can detect.
+feature engineering, and it implements the trainer repo's serving contract
+(`UmairStn/CSE-Stock-Return-Predictor`, `docs/serving-contract.md`): the trainer
+featurizes with a byte-equivalent module, so training and serving cannot drift
+unless someone edits one side. A drifted feature produces a confident, plausible,
+**wrong** prediction that nothing else in the stack can detect — which is why the
+per-horizon `feature_ranges` tripwire in `prediction_engine.py` now fails loud
+whenever a live value leaves its training band.
+
+Every feature describes the LAST bar of a trailing **5-bar slice** of completed
+bars, and all recursive indicators (EMA/MACD) are seeded INSIDE the slice, so a
+value is identical no matter how much history the caller holds.
 
 The 11 features, in positional order:
 
@@ -140,14 +158,17 @@ RSI_3, Return_Lag1, Return_Lag2,
 SMA_3_Pct, EMA_3_Pct, MACD_Pct, MACD_Hist_Pct
 ```
 
-Every window is ≤ 3 **because serving only has ~5 bars** — the CSE chart API
-returns the same 5 daily bars regardless of the period requested. SMA/EMA/MACD
-used to be display-only; the current artifact takes them as inputs (as `*_Pct`
-ratios, scale-free). Any new feature must still work on a 4–5 bar window.
+Serving only has ~5 bars — the CSE chart API returns the same 5 daily bars
+regardless of the period requested — which is why every window is short and the
+whole system is built around the 5-bar slice. Any new feature must work on that
+window and be added to BOTH this file and the trainer repo.
 
-**Changing this list invalidates the trained artifact.** XGBoost matches on feature
-name and raises loudly on mismatch (good — it fails rather than mispredicts), but the
-model must then be retrained: `python -m ml.train_model`.
+**Changing the feature list invalidates the trained artifact.** XGBoost matches on
+feature name and raises loudly on mismatch (good — it fails rather than
+mispredicting), but the model must then be retrained with the **canonical trainer**
+— the upstream repo: `cse-analyzer train --horizon 1|7|30` (see
+[ml/TRAINING_REQUIREMENTS.md](ml/TRAINING_REQUIREMENTS.md)). The in-repo
+`ml/train_model.py` is legacy.
 
 ### The model is cross-sectional — do not reintroduce company identity
 
@@ -169,14 +190,14 @@ including ones absent from training.
 - **`Return_Lag1` is `pct_change().shift(1)`** — the return over t-2 → t-1, *not*
   yesterday. Inherited from the original training script; almost certainly unintended,
   but kept so train and serve agree. Changing it requires a retrain.
-- **RSI is divided by 100** in the feature vector (0–1), while `technical_summary`
-  reports it on the usual 0–100 scale.
+- **RSI_3 is Cutler-style** — an equal-weight mean of the last 3 daily changes,
+  on the **0–100 scale, never divided by 100**. (An earlier serving build used
+  Wilder smoothing ÷ 100, feeding the model 100x-smaller values than training.)
 - **Flat price series give RSI 50, not 100.** Guarding only `avg_loss == 0` (the common
   shortcut) maps a stale, unchanged series to "extremely overbought" — a real hazard on
   illiquid CSE counters. See `_rsi_from_averages`.
-- **RSI_3 on ~5 bars is warm-up sensitive** — Wilder smoothing seeds from the first
-  window, so the value depends on those few bars. Unavoidable with a 5-bar feed;
-  `MIN_ROWS = 4` is the floor.
+- **MACD signal span is 3, not 2** — it must equal the trainer's `EMA_3(MACD)`,
+  or every `MACD_Hist_Pct` sits off its trained distribution.
 
 ## Key files in `services/`
 
@@ -270,6 +291,14 @@ that will serve it (`xgboost-cpu` is pinned in `requirements.txt` for the same r
 The dev bind mount (`..:/app`) means output lands directly in your host `ml/data/` and
 `models/` folders.
 
+> **NOTE (Oct 2026):** the **canonical trainer is now the upstream repo**
+> (`UmairStn/CSE-Stock-Return-Predictor`: `cse-analyzer fetch` → `train --horizon 1|7|30`),
+> which writes drop-in artifacts under the exact filenames `models/` already uses
+> (incl. per-horizon `feature_ranges` for the tripwire). See
+> [ml/TRAINING_REQUIREMENTS.md](ml/TRAINING_REQUIREMENTS.md). The in-repo
+> `ml/fetch_data.py` / `ml/train_model.py` pipeline is legacy — kept for reference,
+> no longer the source of the deployed artifacts.
+
 ### Manual test scripts
 
 ```bash
@@ -294,6 +323,13 @@ docker compose -f docker/docker-compose.yml exec backend-dev python -m test.veri
   (see [api/dependencies.py](api/dependencies.py)); the scraper is cheap, FinBERT is not.
 - **A missing model artifact must not crash the app.** The engine records the failure
   and the endpoint returns HTTP 200 with `price_prediction: null` and a `model_status`.
+- **Prediction failures never sink sentiment (or vice versa).** The analyze route
+  catches every prediction-path failure (`price_data_error`, `insufficient_history`,
+  `prediction_failed`), degrades to a null prediction block + warning, and still
+  returns the sentiment block, latest price and technicals. Sentiment itself already
+  degraded the same way (`news_pipeline` never raises). The two pipelines are
+  independent services that share one response — neither may 4xx/5xx the other out
+  of it.
 - First FinBERT run downloads ~400MB from Hugging Face. The `hf_cache` volume persists
   it across rebuilds for **both** dev and prod — don't remove those mappings.
 - Scraping is network- and layout-dependent. `GOOGLE_NEWS_RSS` is the reliable default;
@@ -334,14 +370,15 @@ it into the image.
 
 ## Known limitations (worth stating plainly)
 
-- **Trained on Yahoo bars, served on CSE bars.** Serving moved to the live CSE feed
-  (see the data contract), so `as_of` is genuinely current — but the artifact was
-  trained on Yahoo history and the feeds differ in detail. The measured skew:
-  serving's `Open_Pct` (previous close / close, since the CSE payload has no Open)
-  is ~2x wider than training's real `Open/Close` and correlates ~0 with it, though
-  97.9% of values stay inside the training p1-p99 band and feature importances are
-  flat (~8% each), so the effect is bounded. The clean fix, if ever wanted:
-  approximate `Open = Close.shift(1)` in the training CSVs too, and retrain.
+- **Feed-convention skew — resolved Oct 2026.** Serving now implements the trainer
+  repo's serving contract (`docs/serving-contract.md`) exactly: `Open = Close(t-1)`
+  on both sides, `x/Close − 1` ratios, Cutler RSI (0–100), slice-seeded EMAs. A
+  shadow check diffing the backend featurizer against an independent
+  implementation of the contract on identical live bars shows exact parity.
+  **Artifacts trained before this alignment (e.g. the 2026-09-08 set) saw the old
+  conventions** — retrain with the upstream repo (`cse-analyzer train --horizon
+  1|7|30`) before trusting outputs. The metadata `feature_ranges` tripwire warns
+  whenever live values leave the training band.
 - **Next-day direction is near the noise floor.** Beating the majority-class baseline by
   1–3% is a genuine result; anything dramatically higher usually indicates leakage.
   `ml/train_model.py` prints the baseline next to accuracy for exactly this reason.

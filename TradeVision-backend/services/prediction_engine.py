@@ -11,6 +11,12 @@ Target:
 
 The models have no sentiment input (fixed cross-sectional 11-feature contract),
 so the FinBERT blend is applied to the predicted return based on the horizon scale.
+
+Serving contract: every horizon's metadata carries `feature_ranges` (p1/p50/p99
+per feature, from the actual training rows). Each live prediction is checked
+against its [p1, p99] band; breaches surface as `feature_warnings` in the
+response (serving-contract.md §5) — the prediction is still returned, never
+silently suppressed.
 """
 
 import json
@@ -23,6 +29,8 @@ import xgboost as xgb
 
 from services import price_data
 from services.features import (
+    MIN_ROWS,
+    SLICE_BARS,
     add_indicators,
     build_feature_row,
     latest_technicals,
@@ -82,6 +90,33 @@ def _direction_label(ret: float) -> str:
     return "FLAT"
 
 
+def _tripwire_warnings(key: str, feature_row, meta: dict) -> list[str]:
+    """
+    Serving-contract §5: compare each live feature value against the [p1, p99]
+    band it was trained on (metadata `feature_ranges`). Breaches add context;
+    they never suppress the prediction. Metadata without feature_ranges (older
+    artifacts) simply skips the check.
+    """
+    ranges = meta.get("feature_ranges")
+    if not ranges:
+        return []
+    values = feature_row.iloc[0]
+    out: list[str] = []
+    for name in feature_row.columns:
+        band = ranges.get(name) or {}
+        low, high = band.get("p1"), band.get("p99")
+        if low is None or high is None:
+            continue
+        value = float(values[name])
+        if value < float(low) or value > float(high):
+            out.append(
+                f"{key}: {name}={value:.4g} outside training band "
+                f"[p1={float(low):.4g}, p99={float(high):.4g}] "
+                f"(out_of_distribution)"
+            )
+    return out
+
+
 class StockPredictionEngine:
     def __init__(self, models_dir: str | None = None):
         self.models_dir = os.path.abspath(models_dir or _MODELS_DIR)
@@ -124,6 +159,14 @@ class StockPredictionEngine:
                 try:
                     with open(meta_path, "r", encoding="utf-8") as f:
                         self._metadata[key] = json.load(f)
+                    min_bars = self._metadata[key].get("min_bars_required")
+                    if min_bars is not None and int(min_bars) != SLICE_BARS:
+                        print(
+                            f"[prediction_engine] Warning: {conf['meta_file']} was "
+                            f"trained with min_bars_required={min_bars} but the "
+                            f"serving contract slices SLICE_BARS={SLICE_BARS} — "
+                            f"feature parity cannot be guaranteed for this artifact."
+                        )
                 except Exception as e:
                     print(f"[prediction_engine] Warning: Could not read metadata {conf['meta_file']}: {e}")
 
@@ -165,12 +208,24 @@ class StockPredictionEngine:
                 "model_status": "model_not_loaded",
                 "model_error": self.load_error,
                 "technical_summary": None,
+                "feature_warnings": [],
             }
 
         df = price_data.get_prediction_history(ticker)
+        feature_warnings: list[str] = []
+        if len(df) < SLICE_BARS:
+            # Short-history degraded mode (3-4 completed bars): never silent.
+            feature_warnings.append(
+                f"Only {len(df)} of {SLICE_BARS} required daily bars were available "
+                f"for {ticker.symbol} (thin trading / recent non-trading sessions). "
+                f"The prediction runs on a shortened feature window — undefined "
+                f"values are neutral-filled (Return_Lag2=0) and EMAs are seeded "
+                f"shorter than the contract. Treat this forecast as degraded."
+            )
         feature_row = build_feature_row(df)
         indicators = add_indicators(df)
         latest = price_data.latest_close(df)
+        as_of = price_data.latest_date(df)
         sigma = realized_volatility(df)
 
         horizons = {}
@@ -202,6 +257,13 @@ class StockPredictionEngine:
             metrics = meta.get("metrics", {})
             directional_acc = metrics.get("directional_accuracy")
 
+            # Serving contract §5 — out-of-distribution tripwire per horizon.
+            tripwire = _tripwire_warnings(key, feature_row, meta)
+            if tripwire:
+                for line in tripwire:
+                    print(f"[prediction_engine] tripwire {ticker.symbol}: {line}")
+                feature_warnings.extend(tripwire)
+
             horizons[key] = {
                 "horizon_days": days,
                 "predicted_return": round(expected_return, 4),
@@ -229,11 +291,13 @@ class StockPredictionEngine:
             price_pred_block = None
 
         return {
+            "observation_date": as_of,
             "price_prediction": price_pred_block,
             "horizons": horizons,
             "model_status": "loaded",
             "model_error": None,
             "technical_summary": latest_technicals(indicators),
+            "feature_warnings": feature_warnings,
         }
 
     def feature_row(self, ticker: Ticker) -> dict:

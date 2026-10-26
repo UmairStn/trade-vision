@@ -28,7 +28,14 @@ import pandas as pd
 import yfinance as yf
 
 from services.cache import TTLCache
-from services.features import MIN_ROWS, REQUIRED_OHLCV, drop_non_trading_rows
+from services.features import (
+    MIN_ROWS,
+    REQUIRED_OHLCV,
+    SLICE_BARS,
+    InsufficientHistoryError,
+    cse_payload_to_ohlcv,
+    drop_non_trading_rows,
+)
 from services.ticker_registry import Ticker
 
 DEFAULT_PERIOD = "2y"
@@ -218,11 +225,26 @@ def latest_date(df: "pd.DataFrame") -> str | None:
 
 def get_prediction_history(ticker: Ticker) -> "pd.DataFrame":
     """
-    Fetches the 5-day historical data from the live CSE API for predictions.
-    This avoids the stale Yahoo Finance data feed.
+    The last ~5 COMPLETED daily bars from the live CSE chart API — the only
+    feed the prediction model ever sees (see AGENTS.md, the data contract).
+
+    All mapping/validation is delegated to features.cse_payload_to_ohlcv(),
+    the serving contract's single ingestion entry point, so the serving side
+    applies the exact hygiene training was built with:
+
+      * invalid bars are rejected (never clamped), duplicates collapse,
+      * the still-open session is dropped (the model predicts only *from* a
+        completed close; set PREDICT_FROM_OPEN_SESSION=1 to override for
+        demos/replays),
+      * fewer than SLICE_BARS completed bars RAISES rather than guessing.
+        Note the feed only ever exposes ~5 bars, so on an open trading
+        session (today's bar dropped) this can legitimately refuse.
+
+    cse_api.historical_5day() hands back normalized keys; the mapper speaks
+    the CSE wire keys, so this is a rename — not a re-implementation.
     """
     from services import cse_api
-    
+
     try:
         raw = cse_api.historical_5day(ticker.symbol)
     except Exception as e:
@@ -231,32 +253,38 @@ def get_prediction_history(ticker: Ticker) -> "pd.DataFrame":
     if not raw:
         raise PriceDataError(f"No recent CSE historical data for {ticker.symbol}.")
 
-    df = pd.DataFrame(raw)
-    
-    # Map to standard OHLCV
-    df["Date"] = pd.to_datetime(df["time"], unit="ms")
-    df.set_index("Date", inplace=True)
-    df["Close"] = pd.to_numeric(df["price"], errors="coerce")
-    df["High"] = pd.to_numeric(df["high"], errors="coerce").fillna(df["Close"])
-    df["Low"] = pd.to_numeric(df["low"], errors="coerce").fillna(df["Close"])
-    df["Volume"] = pd.to_numeric(df["quantity"], errors="coerce")
-    
-    # CSE chart data doesn't include Open, approximate from previous Close
-    df["Open"] = df["Close"].shift(1).fillna(df["Close"])
+    wire = [
+        {
+            "t": record.get("time"),
+            "p": record.get("price"),
+            "h": record.get("high"),
+            "l": record.get("low"),
+            "q": record.get("quantity"),
+        }
+        for record in raw
+    ]
 
-    df = df[REQUIRED_OHLCV].copy()
-    df = df.dropna(subset=["Close"]).sort_index()
+    allow_open = os.getenv("PREDICT_FROM_OPEN_SESSION", "").strip().lower() not in {
+        "", "0", "false", "no",
+    }
 
-    if df.empty:
-        raise PriceDataError(f"Price data for {ticker.symbol} has no usable rows.")
+    try:
+        frame = cse_payload_to_ohlcv(wire, drop_open_session=not allow_open)
+    except ValueError as e:
+        if "completed bar" in str(e):
+            # Hard refusal only below MIN_ROWS (3). Between 3 and 5 bars the
+            # prediction runs in degraded warm-up mode (see features.py), with
+            # a warning attached by prediction_engine.
+            raise InsufficientHistoryError(
+                f"{ticker.symbol}: {e}. The CSE chart feed only exposes ~5 daily "
+                f"bars; while a session is open the current (incomplete) bar is "
+                f"dropped, and thinly traded counters may not trade every session. "
+                f"Retry after the close, or set PREDICT_FROM_OPEN_SESSION=1 to "
+                f"include the in-progress bar."
+            ) from e
+        raise PriceDataError(f"No usable CSE bars for {ticker.symbol}: {e}") from e
 
-    df = drop_non_trading_rows(df)
-
-    if len(df) < MIN_ROWS:
-        raise PriceDataError(
-            f"Only {len(df)} usable trading day(s) for {ticker.symbol} after "
-            f"discarding non-trading rows (need {MIN_ROWS}). The counter may be too illiquid to model."
-        )
-
+    df = frame.set_index("Date")[REQUIRED_OHLCV].copy()
     df.attrs["stale_days"] = _staleness_days(df)
+    df.attrs["history_bars"] = len(df)
     return df

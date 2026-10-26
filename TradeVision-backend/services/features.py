@@ -1,47 +1,53 @@
 """
 Feature engineering — the single source of truth shared by training and serving.
 
-`ml/train_model.py` and `services/prediction_engine.py` both import FEATURE_COLUMNS
-and the builders here. That is the whole point of this module: if training and
-inference computed features independently they would drift, and a drifted feature
-produces a confident, plausible, wrong prediction with nothing in the stack to
-flag it.
+This module implements the serving contract in the trainer repo
+(UmairStn/CSE-Stock-Return-Predictor, `docs/serving-contract.md`). Training
+featurizes with that repo's byte-equivalent `features.py`; serving runs this
+file. If the two ever disagree, the artifact consumes values it never saw in
+training and returns confident, wrong predictions with nothing in the stack to
+flag it — which is exactly what happened once already.
 
-THE MODEL CONTRACT (do not reorder — XGBoost matches on position):
+THE MODEL CONTRACT (feature names/order are positional — XGBoost matches on them):
 
     Open_Pct, High_Pct, Low_Pct, Rel_Volume,
-    RSI_14, RSI_7, Return_Lag1, Return_Lag2, Return_Lag3
+    RSI_3, Return_Lag1, Return_Lag2, SMA_3_Pct, EMA_3_Pct, MACD_Pct, MACD_Hist_Pct
 
-CROSS-SECTIONAL BY DESIGN. Every feature above is scale-free, so the model
-learns "what does this pattern imply about tomorrow" rather than "what does
-company #3 usually do". That is what lets it predict ANY CSE ticker, including
-ones absent from training.
+Conventions that must stay in lockstep with the trainer:
 
-Two features were deliberately removed to get here:
+  * Every feature describes the LAST bar of a trailing 5-bar slice of
+    COMPLETED trading bars, and every recursive indicator (EMA/MACD) is seeded
+    INSIDE that slice — so a value is identical no matter how much history the
+    caller happens to hold.
+  * `Open` is synthesized as `Close(t-1)`: the CSE chart feed has no open
+    (its `o` field is always null), so training was converted to the same
+    convention.
+  * Ratio features are `x / Close - 1` (centered on 0), never bare `x / Close`.
+  * RSI_3 is Cutler-style equal-weight RSI on the 0-100 scale — not Wilder,
+    and never divided by 100.
+  * Rel_Volume is an uncapped within-slice ratio of like quantities, so a
+    Yahoo-vs-CSE unit difference cannot skew it.
+  * Only completed bars are ever featurized: `cse_payload_to_ohlcv()` below
+    (the ingestion entry point) drops the still-open session.
 
-  * Asset_ID — an integer company index. Its tree splits only covered the 9
-    training companies, so a 10th had no valid value to pass. This was the sole
-    reason the old model was locked to 9 stocks.
-  * Log_Volume — log1p(raw share count), roughly 15 for a large cap and 9 for a
-    thin counter. Less obvious than Asset_ID but the same leak: it encoded
-    company size. Replaced by Rel_Volume, which compares a stock's volume to its
-    OWN recent average and therefore means the same thing everywhere.
+CROSS-SECTIONAL BY DESIGN. Every feature is scale-free, so the model predicts
+ANY CSE ticker, including ones absent from training. Company identity
+(Asset_ID) and raw size (Log_Volume) were deliberately removed — re-adding
+either would lock the model back to its training universe.
 
-One quirk is replicated deliberately from the original training script:
-
-  * Return_Lag1 is `pct_change().shift(1)` — the return over t-2 -> t-1, NOT
-    yesterday's return. The current day's own return is computed but never used
-    as a feature. Almost certainly unintended upstream; kept so this retrain
-    changes one thing at a time. Revisit separately.
-
-RSI is still divided by 100, matching the original training script, which read
-pre-computed 0-100 RSI columns out of the CSVs and rescaled them.
+Historical note: an earlier serving build computed `x / Close` ratios (e.g.
+Open_Pct ≈ 1.0 instead of ≈ 0.0), divided RSI by 100, and used a Wilder/EMA
+variant — nine of eleven features were off-scale against the artifact. The
+per-horizon `feature_ranges` tripwire in `prediction_engine.py` now fails loud
+instead of silently whenever live values leave their training band.
 """
 
 # pyrefly: ignore [missing-import]
 import numpy as np
 # pyrefly: ignore [missing-import]
 import pandas as pd
+
+import datetime as _dt
 
 # Column order the model is trained on. Positional — never reorder.
 FEATURE_COLUMNS = [
@@ -64,15 +70,21 @@ REQUIRED_OHLCV = ["Open", "High", "Low", "Close", "Volume"]
 # Lookback for the relative-volume baseline.
 VOLUME_WINDOW = 3
 
-# Ceiling on Rel_Volume. A near-dormant counter that suddenly trades once can
-# produce a ratio in the hundreds; unclipped, that single outlier dominates the
-# split search and the model learns from an artefact.
-REL_VOLUME_CAP = 10.0
+# Every feature describes the LAST bar of a trailing slice of this many
+# COMPLETED bars. The trainer refuses to build features on anything shorter,
+# and all recursive indicators are seeded inside the slice.
+SLICE_BARS = 5
 
-# RSI_3 needs 4 rows to emit a first value and Wilder smoothing is recursive.
-# Rel_Volume needs VOLUME_WINDOW rows. 4 is the floor for a usable answer;
-# callers should feed exactly 4-5 rows from the CSE API.
-MIN_ROWS = 4
+# Hard floor — below this many completed bars a prediction is refused outright.
+# 3 is the true minimum computable window (Rel_Volume and Return_Lag1 need
+# exactly 3 closes; Open/High/Low/SMA need fewer). Between 3 and SLICE_BARS the
+# feature row is a WARM-UP APPROXIMATION: undefined values are neutral-filled
+# and EMAs are seeded shorter than the contract. This is a deliberate,
+# owner-approved deviation from the trainer contract (which demands a full
+# 5-bar slice) so thinly traded counters still get a forecast — every
+# prediction built from a short history carries an explicit degraded-window
+# warning from prediction_engine.
+MIN_ROWS = 3
 
 
 class InsufficientHistoryError(ValueError):
@@ -107,6 +119,123 @@ def drop_non_trading_rows(df: "pd.DataFrame") -> "pd.DataFrame":
         return df
     volume = pd.to_numeric(df["Volume"], errors="coerce").fillna(0.0)
     return df[volume > 0]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CSE ingestion — ported byte-for-byte from the trainer repo's features.py
+# (UmairStn/CSE-Stock-Return-Predictor). This is the single mapping entry
+# point for live CSE bars; do not hand-roll the mapping anywhere else.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Columns the wire mapper produces before Open is synthesized. Deliberately
+# does NOT include Open: the CSE feed has none, and prepare_ohlcv creates it.
+_INGEST_COLUMNS = ["High", "Low", "Close", "Volume"]
+
+# Sri Lanka has used a fixed UTC+05:30 offset since 2006 (no DST), so a fixed
+# offset keeps the trade-date conversion dependency-free (no tz database).
+_COLOMBO_TZ = _dt.timezone(_dt.timedelta(hours=5, minutes=30), name="Asia/Colombo")
+
+
+def prepare_ohlcv(df: "pd.DataFrame") -> "pd.DataFrame":
+    """Shared ingestion contract: validate -> drop non-trading -> synthesize Open.
+
+    The real ``Open`` column (Yahoo's, or a live feed's) is always overwritten
+    with ``Open(t) = Close(t-1)``, because the CSE payload reports ``o: null``:
+    on both training and serving data the "open" is by definition the previous
+    close. The first row of a history has no previous close (``NaN``); its
+    features are dropped later because a full slice is unavailable.
+    """
+    missing = [c for c in _INGEST_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required OHLCV columns: {', '.join(missing)}")
+    if df.empty:
+        raise ValueError("Price data is empty")
+    clean = drop_non_trading_rows(df)
+    close = pd.to_numeric(clean["Close"], errors="coerce").astype("float64")
+    clean = clean.assign(Open=close.shift(1))
+    return clean
+
+
+def _trade_date(raw_timestamp: float) -> "_dt.date":
+    """Convert a CSE epoch timestamp (ms, or s tolerated) to its Colombo date."""
+    seconds = raw_timestamp if abs(raw_timestamp) < 1e12 else raw_timestamp / 1000.0
+    return _dt.datetime.fromtimestamp(seconds, tz=_COLOMBO_TZ).date()
+
+
+def cse_payload_to_ohlcv(
+    payload,
+    *,
+    now: "_dt.datetime | None" = None,
+    drop_open_session: bool = True,
+) -> "pd.DataFrame":
+    """Map raw CSE API price-history records to the canonical OHLCV frame.
+
+    Observed record shape (the CSE wire keys)::
+
+        {"h": 18.1, "l": 17.6, "o": null, "s": 108923744269,
+         "q": 6308277, "p": 17.7, "c": null, "pc": null,
+         "t": 1792348200000, "n": null, "id": 297}
+
+    Mapping and rules (mirrors the training-time hygiene exactly):
+
+    * ``p`` -> Close, ``h`` -> High, ``l`` -> Low, ``q`` -> Volume,
+      ``t`` -> trade date (Asia/Colombo, fixed UTC+05:30);
+    * ``o``, ``c``, ``pc``, ``n``, ``id``, ``s`` are *never read* -- Open is
+      synthesized from the previous close by :func:`prepare_ohlcv`;
+    * a bar with ``not (l <= p <= h)`` or missing/invalid price fields is
+      rejected (never clamped); malformed records are skipped;
+    * duplicate trade dates are collapsed to the latest record;
+    * today's still-open session is dropped by default (the model only ever
+      predicts *from* a completed close -- override ``drop_open_session`` for
+      replay/shadow testing);
+    * raises ``ValueError`` when fewer than :data:`MIN_ROWS` (3) completed bars
+      survive: below that nothing computable remains, so the predictor refuses
+      instead of guessing. Between 3 and :data:`SLICE_BARS` bars the prediction
+      runs in degraded warm-up mode with an explicit caller-side warning.
+    """
+    if not payload:
+        raise ValueError("CSE payload is empty")
+    now = now or _dt.datetime.now(tz=_COLOMBO_TZ)
+    today = now.astimezone(_COLOMBO_TZ).date()
+
+    parsed = []
+    for record in payload:
+        try:
+            close = float(record["p"])
+            high = float(record["h"])
+            low = float(record["l"])
+            trade_date = _trade_date(float(record["t"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not all(np.isfinite(value) for value in (high, low, close)):
+            continue
+        if not low <= close <= high:
+            continue  # impossible bar: reject, never clamp
+        try:
+            quantity = float(record["q"]) if record.get("q") is not None else np.nan
+        except (TypeError, ValueError):
+            quantity = np.nan
+        parsed.append((float(record["t"]), trade_date, {
+            "Date": pd.Timestamp(trade_date), "High": high, "Low": low,
+            "Close": close, "Volume": quantity,
+        }))
+    if not parsed:
+        raise ValueError("CSE payload contained no price bars")
+
+    parsed.sort(key=lambda entry: entry[0])
+    frame = pd.DataFrame(
+        [entry[2] for entry in parsed],
+        columns=["Date", "High", "Low", "Close", "Volume"],
+    )
+    frame = frame.drop_duplicates(subset="Date", keep="last")
+    if drop_open_session and frame["Date"].iloc[-1].date() == today:
+        frame = frame.iloc[:-1]
+    if len(frame) < MIN_ROWS:
+        raise ValueError(
+            f"CSE payload has {len(frame)} completed bar(s); "
+            f"at least {MIN_ROWS} are required for prediction"
+        )
+    return prepare_ohlcv(frame).reset_index(drop=True)
 
 
 def _wilder_smooth(values: "pd.Series", period: int) -> "pd.Series":
@@ -194,9 +323,12 @@ def add_indicators(df: "pd.DataFrame") -> "pd.DataFrame":
     Attach every indicator this system reports, on a copy of `df`.
 
     Two distinct groups:
-      * Model features — RSI_3 (0-100 here; rescaled in build_feature_row).
+      * Model features — RSI_3 (Cutler, 0-100), used by build_feature_row.
       * Display only — SMA/EMA/MACD, surfaced in the API's technical_summary.
-        These are NOT model inputs; the artifact was trained without them.
+
+    All windows are short (<= 3) and the RSI is equal-weight rather than
+    recursive-Wilder, so values depend only on the trailing few bars — the
+    slice-scope parity rule from the serving contract.
     """
     missing = [c for c in REQUIRED_OHLCV if c not in df.columns]
     if missing:
@@ -205,14 +337,28 @@ def add_indicators(df: "pd.DataFrame") -> "pd.DataFrame":
     out = df.copy()
     close = out["Close"].astype(float)
 
-    # --- Model features ---
-    out["RSI_3"] = rsi(close, 3)
+    # --- Model feature: Cutler RSI (simple equal-weight mean of the last 3
+    # daily changes), on the standard 0-100 scale. Wilder smoothing would be
+    # recursive over whatever history the caller passed, breaking the
+    # "identical on any history length" guarantee the trainer relies on.
+    # min_periods=1: on a full 5-bar slice the last row always has its 3
+    # changes (identical value); on a 3-4 bar short history it falls back to
+    # the available changes instead of NaN — part of the degraded-window mode.
+    delta = close.diff()
+    gain = delta.clip(lower=0.0)
+    loss = -delta.clip(upper=0.0)
+    out["RSI_3"] = _rsi_from_averages(
+        gain.rolling(3, min_periods=1).mean(),
+        loss.rolling(3, min_periods=1).mean(),
+    )
 
     # --- Display only ---
     out["SMA_3"] = close.rolling(window=3).mean()
     out["EMA_3"] = close.ewm(span=3, adjust=False).mean()
     out["MACD"] = out["EMA_3"] - close.ewm(span=5, adjust=False).mean()
-    out["MACD_Signal"] = out["MACD"].ewm(span=2, adjust=False).mean()
+    # Signal = EMA(3) of MACD (was span=2 — a 1-point change that moved every
+    # MACD_Hist_Pct off its trained distribution).
+    out["MACD_Signal"] = out["MACD"].ewm(span=3, adjust=False).mean()
     out["MACD_Hist"] = out["MACD"] - out["MACD_Signal"]
 
     return out
@@ -220,35 +366,39 @@ def add_indicators(df: "pd.DataFrame") -> "pd.DataFrame":
 
 def add_model_features(df: "pd.DataFrame") -> "pd.DataFrame":
     """
-    Attach the model features. Expects add_indicators() to have run already
-    (or RSI_3 to be present on the 0-100 scale, as in the training CSVs).
+    Attach the model features. Expects add_indicators() to have run already.
 
-    No company identity is taken or added — see the module docstring.
+    Every ratio is `x / Close - 1`, centered on 0 (0.0 = flat) — the same
+    convention the trainer uses. No company identity is taken or added; see
+    the module docstring.
     """
     out = df.copy()
     close = out["Close"].astype(float)
 
     # Intraday shape relative to the same day's close. Close_Pct is omitted
-    # because it is identically 1.0.
-    out["Open_Pct"] = out["Open"].astype(float) / close
-    out["High_Pct"] = out["High"].astype(float) / close
-    out["Low_Pct"] = out["Low"].astype(float) / close
+    # because it is identically 0.0. Open is the previous close (see
+    # cse_payload_to_ohlcv), so Open_Pct is the overnight move.
+    out["Open_Pct"] = out["Open"].astype(float) / close - 1.0
+    out["High_Pct"] = out["High"].astype(float) / close - 1.0
+    out["Low_Pct"] = out["Low"].astype(float) / close - 1.0
 
-    # Volume relative to this stock's OWN recent average: 1.0 is a normal day,
-    # 2.0 is twice usual activity. Scale-free, so it carries the same meaning for
-    # a large cap and a thin counter alike.
+    # Volume relative to this stock's OWN recent average: ~1.0 is a normal
+    # day, 2.0 is twice usual activity. An uncapped within-slice ratio (the
+    # trainer applies no cap either); the replace(0 -> NaN) guard keeps a
+    # dormant window from yielding inf, which XGBoost accepts silently.
     volume = out["Volume"].astype(float)
     avg_volume = volume.rolling(VOLUME_WINDOW, min_periods=VOLUME_WINDOW).mean()
-    # replace(0 -> NaN) before dividing: a fully dormant window would
-    # otherwise yield inf, which XGBoost accepts silently as a huge value.
-    out["Rel_Volume"] = (volume / avg_volume.replace(0.0, np.nan)).clip(upper=REL_VOLUME_CAP)
+    out["Rel_Volume"] = volume / avg_volume.replace(0.0, np.nan)
 
-    # Training rescaled the CSV's 0-100 RSI columns to 0-1.
-    out["RSI_3"] = out["RSI_3"].astype(float) / 100.0
+    # RSI_3 stays on the 0-100 Cutler scale computed in add_indicators().
+    # (The old build divided it by 100 here, feeding the model a 100x-smaller
+    # value than the trainer's 0-100 column.)
 
-    # Scale-free technical indicators
-    out["SMA_3_Pct"] = close / out["SMA_3"]
-    out["EMA_3_Pct"] = close / out["EMA_3"]
+    # Scale-free trend position, all centered on 0.
+    out["SMA_3_Pct"] = out["SMA_3"] / close - 1.0
+    out["EMA_3_Pct"] = out["EMA_3"] / close - 1.0
+    # MACD values are already differences — they are centered naturally, so
+    # they get the plain Close normalization (no -1), matching the trainer.
     out["MACD_Pct"] = out["MACD"] / close
     out["MACD_Hist_Pct"] = out["MACD_Hist"] / close
 
@@ -263,8 +413,17 @@ def build_feature_row(df: "pd.DataFrame") -> "pd.DataFrame":
     """
     Build the single feature row for the most recent trading day.
 
-    `df` must be date-ascending OHLCV with enough history for RSI and the volume
-    baseline to converge — pass the full ~6 months, not a trimmed tail.
+    `df` must be date-ascending OHLCV with at least MIN_ROWS (3) completed
+    trading bars. Only the trailing SLICE_BARS (5) rows are ever read:
+    indicators are seeded inside that slice, exactly as the trainer seeds
+    them, so on a full history the produced values are history-length
+    independent and byte-comparable with the training featurizer's output.
+
+    SHORT HISTORY (3-4 bars, owner-approved degraded mode): features that
+    cannot exist (Return_Lag2 needs 4 closes) are neutral-filled with 0.0,
+    RSI uses the available changes, and EMAs are warm-seeded on the short
+    window. The caller (prediction_engine) attaches an explicit
+    degraded-window warning — never a silent approximation.
 
     Returns a DataFrame (not a numpy array) so XGBoost can match on feature name
     and raise on a mismatch rather than silently predicting from misaligned
@@ -275,8 +434,18 @@ def build_feature_row(df: "pd.DataFrame") -> "pd.DataFrame":
             f"Need at least {MIN_ROWS} trading days to build features, got {len(df)}."
         )
 
-    enriched = add_model_features(add_indicators(df))
+    # Slice-scoped: all recursion (EMA/MACD) is seeded on the trailing
+    # SLICE_BARS rows only, never on the caller's full history.
+    slice_df = df.iloc[-SLICE_BARS:]
+    enriched = add_model_features(add_indicators(slice_df))
     row = enriched.iloc[[-1]][FEATURE_COLUMNS].astype(float)
+
+    if len(df) < SLICE_BARS:
+        # Degraded-window mode: with 3 bars Return_Lag2 is undefined (needs 4
+        # closes). Fill with the in-distribution neutral (0.0 = no change — the
+        # training mean of both lags sits at ~0), then proceed. The engine has
+        # already promised a warning alongside any prediction built from this.
+        row = row.fillna(0.0)
 
     if row.isna().any().any():
         bad = row.columns[row.isna().iloc[0]].tolist()
