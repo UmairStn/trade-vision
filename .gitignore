@@ -61,4 +61,6 @@ EXPLANATION.md
 # NOTE: models/*.json is deliberately NOT ignored. The trained artifact must be
 # committed — prod has no bind mount and loads it from inside the image.
 implementation_plan.md
-explanation.md
+explanation2.md
+.agents
+tradevision_launch_plan.md
