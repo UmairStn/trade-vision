@@ -13,8 +13,8 @@
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0b0e14" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)" />
 
     <!-- Removed Inter font preload, now using Geist via npm imports -->
 
@@ -50,7 +50,7 @@
             meta.setAttribute('name', 'theme-color');
             document.head.appendChild(meta);
           }
-          meta.setAttribute('content', dark ? '#0b0e14' : '#f6f7f9');
+          meta.setAttribute('content', dark ? '#141412' : '#fbfbfa');
         } catch (e) {
           /* private mode / storage disabled — fall through to the light default */
         }

@@ -45,7 +45,7 @@ import type { Column } from '../ui/DataTable';
  * `syncId`, so one hover crosshairs both.
  */
 
-export type ChartView = 'area' | 'candle' | 'table';
+export type ChartView = 'bar' | 'area' | 'candle' | 'table';
 
 interface PriceChartProps {
   data: StockPrice[];
@@ -200,7 +200,7 @@ export const PriceChart = ({
   height = 320,
   showVolume = true,
   showViewToggle = true,
-  defaultView = 'area',
+  defaultView = 'bar',
   className,
 }: PriceChartProps) => {
   const c = useChartTheme();
@@ -208,23 +208,21 @@ export const PriceChart = ({
   const [view, setView] = useState<ChartView>(defaultView);
   const gradientId = useId().replace(/:/g, '');
 
-  const { rows, domain, axisFloor } = useMemo(() => {
+  const { rows, domain } = useMemo(() => {
     if (data.length === 0) {
-      return { rows: [], domain: [0, 1] as [number, number], axisFloor: 0 };
+      return { rows: [], domain: [0, 1] as [number, number] };
     }
-    const lows = data.map((d) => (Number.isFinite(d.low) ? d.low : d.close));
     const highs = data.map((d) => (Number.isFinite(d.high) ? d.high : d.close));
-    const min = Math.min(...lows);
     const max = Math.max(...highs);
-    // 8% of the visible range, or a rupee if the series is perfectly flat.
-    const pad = max === min ? Math.max(max * 0.01, 1) : (max - min) * 0.08;
-    const floor = Math.max(min - pad, 0);
+    // Bars grow from a true zero baseline — honest magnitude, no padded-axis
+    // exaggeration. 8% headroom above the highest bar.
+    const pad = max === 0 ? 1 : max * 0.08;
     return {
       // `range` backs the candle shape; Recharts maps a [min, max] value to the
       // bar's pixel box, which is what Candle interpolates within.
       rows: data.map((d) => ({ ...d, range: [d.low, d.high] as [number, number] })),
-      domain: [floor, max + pad] as [number, number],
-      axisFloor: floor,
+      domain: [0, max + pad] as [number, number],
+      axisFloor: 0,
     };
   }, [data]);
 
@@ -267,6 +265,7 @@ export const PriceChart = ({
             value={view}
             onChange={setView}
             options={[
+              { value: 'bar', label: 'Bars', icon: <ChartBar className="h-3.5 w-3.5" aria-hidden="true" /> },
               { value: 'area', label: 'Area', icon: <AreaIcon className="h-3.5 w-3.5" aria-hidden="true" /> },
               { value: 'candle', label: 'Candles', icon: <ChartBar className="h-3.5 w-3.5" aria-hidden="true" /> },
               { value: 'table', label: 'Table', icon: <TableIcon className="h-3.5 w-3.5" aria-hidden="true" /> },
@@ -333,7 +332,16 @@ export const PriceChart = ({
                   cursor={{ stroke: c['--chart-baseline'], strokeWidth: 1 }}
                 />
 
-                {view === 'area' ? (
+                {view === 'bar' ? (
+                  // Honest bars from a true zero baseline. Coloured by brand;
+                  // direction is readable via the tooltip and the axis note below.
+                  <Bar
+                    dataKey="close"
+                    animationDuration={animation}
+                    fill={c['--series-1']}
+                    radius={[4, 4, 0, 0]}
+                  />
+                ) : view === 'area' ? (
                   <Area
                     type="monotone"
                     dataKey="close"
@@ -405,9 +413,8 @@ export const PriceChart = ({
           )}
 
           <p className="mt-2 text-xs text-ink-muted">
-            {showVolume ? 'Volume in the lower panel. ' : ''}
-            Price axis starts at Rs {formatPrice(axisFloor)}, not zero — the plot
-            shows the traded range, not magnitude from zero.
+            Bars grow from a true zero baseline (Rs 0), so bar height is honest
+            magnitude — not a padded range. {showVolume ? 'Volume in the lower panel.' : ''}
           </p>
         </>
       )}

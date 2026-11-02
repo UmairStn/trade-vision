@@ -69,7 +69,7 @@ export const SectorHeatmap = ({ className, compact = false }: SectorHeatmapProps
   }, [sectors, filter, sortBy, compact]);
 
   return (
-    <div className={cn('rounded-2xl border border-line bg-surface/50 p-6 backdrop-blur shadow-sm', className)}>
+    <div className={cn('rounded-xl border border-line bg-card p-6', className)}>
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
@@ -88,12 +88,12 @@ export const SectorHeatmap = ({ className, compact = false }: SectorHeatmapProps
         <div className="flex flex-wrap items-center gap-2">
           {/* Quick Breadth Pills */}
           <div className="flex items-center gap-1.5 text-xs font-medium mr-2">
-            <span className="flex items-center gap-1 text-emerald-500">
+            <span className="flex items-center gap-1 text-up">
               <TrendUp className="h-3.5 w-3.5" />
               {gainersCount} Up
             </span>
             <span className="text-ink-muted">·</span>
-            <span className="flex items-center gap-1 text-rose-500">
+            <span className="flex items-center gap-1 text-down">
               <TrendDown className="h-3.5 w-3.5" />
               {losersCount} Down
             </span>
@@ -144,7 +144,7 @@ export const SectorHeatmap = ({ className, compact = false }: SectorHeatmapProps
               className={cn(
                 'rounded-lg px-2 py-0.5 capitalize transition-colors',
                 sortBy === opt
-                  ? 'bg-brand/10 text-brand font-medium'
+                  ? 'bg-brand-subtle text-brand-subtle-ink font-medium'
                   : 'hover:bg-sunken text-ink-secondary'
               )}
             >
@@ -200,9 +200,9 @@ export const SectorHeatmap = ({ className, compact = false }: SectorHeatmapProps
                   'group relative flex flex-col justify-between rounded-xl border p-4 transition-all duration-200',
                   'hover:scale-[1.01] hover:shadow-md',
                   isUp
-                    ? 'border-emerald-500/20 bg-emerald-500/[0.03] hover:border-emerald-500/40 hover:bg-emerald-500/[0.06]'
+                    ? 'border-up/20 bg-up-subtle hover:border-up/40 hover:bg-up/10'
                     : isDown
-                    ? 'border-rose-500/20 bg-rose-500/[0.03] hover:border-rose-500/40 hover:bg-rose-500/[0.06]'
+                    ? 'border-down/20 bg-down-subtle hover:border-down/40 hover:bg-down/10'
                     : 'border-line bg-card/60 hover:border-line-strong hover:bg-sunken'
                 )}
               >

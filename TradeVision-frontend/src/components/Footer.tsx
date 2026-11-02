@@ -23,8 +23,6 @@ const PLATFORM_LINKS = [
 export const Footer = () => (
   <footer className="mt-auto bg-card border-t border-line">
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      {/* Plain border replaces gradient hairline */}
-      <div aria-hidden="true" className="h-px bg-line" />
       <div className="py-10">
         <div className="grid gap-8 md:grid-cols-[1.5fr_1fr_1.5fr]">
           <div>

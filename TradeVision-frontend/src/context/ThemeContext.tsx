@@ -13,9 +13,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('theme');
     if (saved === 'light' || saved === 'dark') return saved;
-    // No stored choice: follow the OS. The inline script in index.html resolves
-    // this the same way before first paint — keep the two in sync.
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    // No stored choice: default to light theme (the shipped default).
+    return 'light';
   });
 
   useEffect(() => {
@@ -31,7 +30,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const meta = document.querySelector<HTMLMetaElement>(
       'meta[name="theme-color"]:not([media])',
     );
-    if (meta) meta.content = theme === 'dark' ? '#0b0e14' : '#f6f7f9';
+    if (meta) meta.content = theme === 'dark' ? '#141412' : '#fbfbfa';
   }, [theme]);
 
   const toggleTheme = () => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));

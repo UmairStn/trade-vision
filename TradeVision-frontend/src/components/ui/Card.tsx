@@ -2,17 +2,15 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 
 /**
- * One card look for the whole app. Radius is fixed at `lg` (14px) — pages used
- * to mix `rounded-md`, `lg`, `xl` and `2xl` inside a single card.
+ * One card look for the whole app. Radius is `md` (10px) — crisp, never
+ * rounded-full on containers. Border is a single warm hairline; shadows are
+ * diffuse and minimal (< 0.05 opacity), never heavy drop shadows.
  *
- * In dark mode `elevated` swaps the drop shadow for a 1px top inner highlight,
- * because a shadow against a #141821 surface is invisible.
+ * `flat` for cards nested inside another card; `glass` for the frosted look.
  */
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  /** `flat` for cards nested inside another card; `glass` for the frosted look. */
   variant?: 'raised' | 'flat' | 'sunken' | 'glass';
-  /** Lifts on hover. Only for cards that are themselves a link or button. */
   interactive?: boolean;
 }
 
@@ -25,13 +23,13 @@ export const Card = ({
 }: CardProps) => (
   <div
     className={cn(
-      'rounded-xl border border-line',
+      'rounded-md border border-line',
       variant === 'raised' && 'bg-card elevated',
       variant === 'flat' && 'bg-card',
       variant === 'sunken' && 'bg-sunken',
       variant === 'glass' && 'glass elevated',
       interactive &&
-        'transition-[transform,box-shadow,border-color] duration-250 ease-out-quart ' +
+        'transition-[transform,box-shadow,border-color] duration-200 ease-out-quart ' +
           'hover:-translate-y-0.5 hover:elevated-pop hover:border-line-strong',
       className,
     )}
@@ -57,7 +55,7 @@ export const CardHeader = ({
 }) => (
   <div
     className={cn(
-      'flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4',
+      'flex flex-wrap items-start justify-between border-b border-line px-5 py-4',
       className,
     )}
   >

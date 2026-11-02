@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Bell, Brain, Circle, Stack, ChartPieSlice, Receipt, TrendDown, TrendUp, Wallet } from '@phosphor-icons/react';
+import { ArrowRight, Bell, Brain, Circle, Receipt, Stack, TrendDown, TrendUp, Wallet } from '@phosphor-icons/react';
 import { MarqueeTicker } from '../components/MarqueeTicker';
 import { StockCard } from '../components/StockCard';
 import { PriceChart } from '../components/charts/PriceChart';
@@ -16,7 +16,6 @@ import {
   Delta,
   Notice,
   Skeleton,
-  Stat,
 } from '../components/ui';
 import { buttonClass } from '../components/ui/Button';
 
@@ -24,23 +23,17 @@ const FEATURES = [
   {
     icon: Brain,
     title: 'Model-backed forecasts',
-    body:
-      'A next-day price and direction probability for any listed symbol, with the ' +
-      'confidence and the date it was computed from both shown, not hidden.',
+    body: 'Next-day price and direction probability for any listed CSE symbol.',
   },
   {
-    icon: ChartPieSlice,
+    icon: Stack,
     title: 'Portfolio tracking',
-    body:
-      'Record holdings at cost and see position value, unrealised gain and day ' +
-      'change against live CSE prices.',
+    body: 'Record holdings at cost and track value against live CSE prices.',
   },
   {
     icon: Bell,
     title: 'AI research assistant',
-    body:
-      'Ask about a company in plain language. Every figure in the answer is ' +
-      'labelled with the data lookup it came from.',
+    body: 'Ask about a company in plain language; every figure cites its data source.',
   },
 ] as const;
 
@@ -62,19 +55,16 @@ export const Home = () => {
   const [heroSeries, setHeroSeries] = useState<StockPrice[]>([]);
   const [heroLoading, setHeroLoading] = useState(true);
 
-  // The hero used to be an empty radial gradient. One real series is a better
-  // advertisement for the product than a decorative glow, and it is the same
-  // request the analyzer makes, so the cost is one round trip.
+  // Hero chart: seven daily bars from the CSE live feed — honest, zero-baseline
+  // magnitude for the default symbol. One round trip, same request the analyzer uses.
   useEffect(() => {
     let stale = false;
     setHeroLoading(true);
-    fetchStockHistory(selectedTicker, 90)
+    fetchStockHistory(selectedTicker, 7)
       .then((points) => {
         if (!stale) setHeroSeries(points);
       })
       .catch(() => {
-        // A failed hero chart must not take the landing page with it; PriceChart
-        // renders its own empty state from the untouched array.
         if (!stale) setHeroSeries([]);
       })
       .finally(() => {
@@ -139,82 +129,73 @@ export const Home = () => {
     <div>
       {/* ---------------------------------------------------------------- hero */}
       <section className="border-b border-line bg-page">
-        <div className="mx-auto grid max-w-7xl px-4 sm:px-6 lg:grid-cols-12 lg:px-8">
-          <div className="animate-fade-in-up py-20 lg:col-span-6 lg:py-32 lg:pr-12">
-            <StatusBadge status={marketSummary?.status} />
-            <h1 className="mt-8 text-[3rem] font-medium leading-[1.05] tracking-tight text-ink sm:text-[4rem]">
-              Multi-horizon intelligence for the{' '}
-              <span className="italic">Colombo Stock Exchange</span>.
-            </h1>
-            <p
-              className="mt-6 max-w-lg text-lg leading-relaxed text-ink-secondary"
-              style={{ animationDelay: '80ms' }}
-            >
-              1-day, 7-day swing and 30-day position forecasts powered by cross-sectional
-              XGBoost regressors and live CSE announcement sentiment via FinBERT.
-            </p>
-            <div
-              className="mt-10 flex flex-wrap gap-4"
-              style={{ animationDelay: '160ms' }}
-            >
-              <Link
-                to="/register"
-                className={buttonClass({ size: 'lg' })}
-              >
-                Create free account
-                <ArrowRight className="h-5 w-5" aria-hidden="true" />
-              </Link>
-              <Link
-                to="/top-stocks"
-                className={buttonClass({
-                  variant: 'subtle',
-                  size: 'lg',
-                })}
-              >
-                Explore today's movers
-              </Link>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
+            {/* Left: copy + CTAs */}
+            <div className="animate-fade-in-up py-20 lg:py-32 lg:pr-12">
+              <div className="flex items-center gap-2 mb-6">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
+                <StatusBadge status={marketSummary?.status} />
+              </div>
+              <h1 className="mt-0 text-[3rem] font-medium leading-[1.05] tracking-tight text-ink sm:text-[4.5rem]">
+                CSE market intelligence,{' '}
+                <span className="text-brand">backed by live prices.</span>
+              </h1>
+              <p className="mt-6 max-w-lg text-lg leading-relaxed text-ink-secondary">
+                One-day, seven-day and thirty-day forecasts for any listed symbol.
+              </p>
+              <div className="mt-10 flex flex-wrap gap-4">
+                <Link
+                  to="/register"
+                  className={buttonClass({ size: 'lg' })}
+                >
+                  Create free account
+                  <ArrowRight className="h-5 w-5" aria-hidden="true" />
+                </Link>
+                <Link
+                  to="/top-stocks"
+                  className={buttonClass({
+                    variant: 'subtle',
+                    size: 'lg',
+                  })}
+                >
+                  Explore today's movers
+                </Link>
+              </div>
+              <p className="mt-8 font-mono text-xs tracking-wider text-ink-muted uppercase">
+                Free while in development. Forecasts are statistical estimates.
+              </p>
             </div>
-            <p
-              className="mt-6 font-mono text-xs tracking-wider text-ink-muted uppercase"
-              style={{ animationDelay: '240ms' }}
-            >
-              Free while in development. Forecasts are statistical estimates.
-            </p>
-          </div>
 
-          <div
-            className="animate-fade-in-up border-t border-line lg:col-span-6 lg:border-t-0 lg:border-l"
-            style={{ animationDelay: '120ms' }}
-          >
-            <div className="flex h-full flex-col bg-sunken p-8 lg:p-12">
-              <div className="mb-12 flex items-end justify-between">
+            {/* Right: live 7-day bar panel */}
+            <div className="animate-fade-in-up border border-line bg-card p-8 lg:p-12 elevated rounded-xl">
+              <div className="flex items-end justify-between mb-6">
                 <div>
                   <h3 className="font-mono text-xs tracking-wider text-ink-muted uppercase">Preview: {selectedTicker}</h3>
-                  <p className="mt-2 text-sm text-ink-muted">Last 90 trading days</p>
+                  <p className="mt-1 text-sm text-ink-muted">Last 7 trading days</p>
                 </div>
                 {heroLoading ? (
-                   <Skeleton className="h-8 w-28" />
+                  <Skeleton className="h-8 w-28" />
                 ) : last ? (
-                   <div className="text-right">
-                     <p className="text-h2 font-medium tracking-tight text-ink">
-                       Rs {formatPrice(last.close)}
-                     </p>
-                     <Delta
-                       value={heroChange}
-                       percent={heroChangePct}
-                       size="sm"
-                       className="mt-1 justify-end"
-                     />
-                   </div>
+                  <div className="text-right">
+                    <p className="text-h2 font-medium tracking-tight text-ink">
+                      Rs {formatPrice(last.close)}
+                    </p>
+                    <Delta
+                      value={heroChange}
+                      percent={heroChangePct}
+                      size="sm"
+                      className="mt-1 justify-end"
+                    />
+                  </div>
                 ) : null}
               </div>
-              
-              <div className="mt-auto">
+              <div className="h-64 w-full">
                 <PriceChart
                   data={heroSeries}
                   ticker={selectedTicker}
                   loading={heroLoading}
-                  height={280}
+                  height={220}
                   showVolume={false}
                   showViewToggle={false}
                 />
@@ -226,7 +207,6 @@ export const Home = () => {
 
       <MarqueeTicker items={tickerItems} />
 
-      {/* ----------------------------------------------------------------- kpis */}
       {/* ----------------------------------------------------------------- kpis */}
       <section
         aria-labelledby="market-today"
@@ -255,12 +235,12 @@ export const Home = () => {
             </Notice>
           ) : null}
 
-          <div className="mt-12 grid grid-cols-2 gap-x-12 gap-y-12 border-t border-line pt-12 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="mt-12 grid grid-cols-2 gap-x-6 gap-y-8 border-t border-line pt-8 sm:grid-cols-3 lg:grid-cols-5">
             {kpis.map((kpi, i) => (
               <div
                 key={String(kpi.label)}
-                className="animate-fade-in-up transition-opacity duration-250 ease-out-quart"
-                style={{ animationDelay: `${i * 80}ms` }}
+                className="animate-fade-in-up rounded-lg border border-line bg-card p-6 elevated transition-all duration-200 hover:elevated-pop hover:border-line-strong"
+                style={{ animationDelay: `${i * 60}ms` }}
               >
                 {isLoading ? (
                   <>
@@ -269,13 +249,16 @@ export const Home = () => {
                     <Skeleton className="mt-2 h-3 w-28" />
                   </>
                 ) : (
-                  <Stat
-                    label={kpi.label}
-                    value={kpi.value}
-                    delta={kpi.delta}
-                    hint={kpi.hint}
-                    className="[&_p]:font-mono [&_p]:text-xs [&_p]:tracking-wider [&_p]:uppercase"
-                  />
+                  <div className="flex items-end justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-medium tracking-wider text-ink-muted uppercase">{kpi.label}</p>
+                      <p className="text-h2 font-bold tabular-nums text-ink">{kpi.value}</p>
+                    </div>
+                    <div className="text-right">
+                      {kpi.delta}
+                      <p className="mt-1 text-xs text-ink-muted">{kpi.hint}</p>
+                    </div>
+                  </div>
                 )}
               </div>
             ))}
@@ -351,63 +334,38 @@ export const Home = () => {
       </section>
 
       {/* ------------------------------------------------------------- features */}
-      {/* ------------------------------------------------------------- features */}
-      <section
-        aria-labelledby="features"
-        className="border-b border-line bg-page"
-      >
+      <section aria-labelledby="features" className="border-b border-line bg-page">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-          <div className="grid gap-16 lg:grid-cols-2 lg:items-center">
-            {/* Image Column */}
-            <div className="relative aspect-square lg:aspect-auto lg:h-[600px] overflow-hidden rounded-sm bg-sunken">
-              <img
-                src="/assets/bento.jpg"
-                alt="Sleek glass dashboard showing financial data and market trends"
-                className="absolute inset-0 h-full w-full object-cover grayscale-[0.2]"
-              />
-            </div>
-            
-            {/* Features Column */}
-            <div>
-              <h2 id="features" className="text-[2.5rem] leading-tight font-medium tracking-tight text-ink">
-                Everything you need to research a CSE listing
-              </h2>
-              <div className="mt-12 space-y-12">
-                {FEATURES.map(({ icon: Icon, title, body }, i) => (
-                  <div
-                    key={title}
-                    className="animate-fade-in-up transition-all duration-300 ease-out-quart"
-                    style={{ animationDelay: `${i * 100}ms` }}
-                  >
-                    <div className="flex items-center gap-4">
-                      <span
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-ink text-page"
-                      >
-                        <Icon className="h-5 w-5" aria-hidden="true" />
-                      </span>
-                      <h3 className="text-h3 font-medium text-ink transition-colors duration-150">
-                        {title}
-                      </h3>
-                    </div>
-                    <p className="mt-4 pl-14 text-lg leading-relaxed text-ink-muted">{body}</p>
-                  </div>
-                ))}
+          <h2 id="features" className="text-[2.5rem] leading-tight font-medium tracking-tight text-ink mb-12">
+            Everything you need to research a CSE listing
+          </h2>
+          <div className="grid gap-6 lg:grid-cols-3">
+            {FEATURES.map(({ icon: Icon, title, body }, i) => (
+              <div
+                key={title}
+                className="animate-fade-in-up rounded-lg border border-line bg-card p-8 elevated transition-all duration-200 hover:elevated-pop hover:border-line-strong"
+                style={{ animationDelay: `${i * 80}ms` }}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-brand text-on-brand mb-6">
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <h3 className="text-h3 font-medium text-ink mb-3">{title}</h3>
+                <p className="text-sm leading-relaxed text-ink-muted">{body}</p>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* ------------------------------------------------------------------ cta */}
-      <section className="bg-sunken">
+      <section className="bg-sunken border-t border-line">
         <div className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8 lg:py-32">
-          <div className="flex flex-col items-center border border-line bg-page p-12 text-center lg:p-24">
+          <div className="border border-line bg-card p-12 text-center lg:p-24 rounded-xl elevated">
             <h2 className="text-[3rem] font-medium leading-tight tracking-tight text-ink sm:text-[4rem]">
-              Start tracking <span className="italic">your positions</span>.
+              Start tracking <span className="italic text-brand">your positions</span>.
             </h2>
-            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-secondary">
-              Create an account to save a watchlist, record holdings and keep the AI
-              assistant's thread between sessions.
+            <p className="mt-6 max-w-2xl mx-auto text-lg leading-relaxed text-ink-secondary">
+              Create an account to save a watchlist and record your holdings.
             </p>
             <div className="mt-10 flex flex-wrap justify-center gap-4">
               <Link

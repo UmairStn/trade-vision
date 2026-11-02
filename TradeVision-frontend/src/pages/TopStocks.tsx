@@ -165,7 +165,7 @@ export const TopStocks = () => {
                   size="sm"
                   align="right"
                   value={
-                    <span className="text-h3 font-bold text-gradient-brand">
+                    <span className="text-h3 font-bold text-brand">
                       {formatPrice(indices.aspi)}
                     </span>
                   }

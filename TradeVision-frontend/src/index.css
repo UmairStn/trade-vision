@@ -1,159 +1,156 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Dark mode is driven by a `.dark` class on <html> (see ThemeContext), not by
-   the OS setting. Tailwind v4's `dark:` variant defaults to prefers-color-scheme,
+   Theme is driven by a `.dark` class on <html> (see ThemeContext), not by the
+   OS setting. Tailwind v4's `dark:` variant defaults to prefers-color-scheme,
    so it has to be re-pointed at the class or every `dark:` utility silently
    keys off the wrong signal.
    --------------------------------------------------------------------------- */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ---------------------------------------------------------------------------
-   Removed Inter font-face. Now using Geist via npm imports.
-   --------------------------------------------------------------------------- */
-
 /* ===========================================================================
-   RAW TOKENS
-   Two layers on purpose: these named roles flip with the theme, and the
-   @theme inline block below maps them onto Tailwind's utility namespaces.
-   Every text/on-surface pair here was measured with a WCAG contrast script,
-   not eyeballed — the ratio against the card surface is noted per line.
+   RAW TOKENS — LIGHT THEME (default / primary)
+   Warm monochrome canvas with a single institutional brand accent and spot
+   pastel semantic colours. Every text/on-surface pair keeps WCAG contrast.
    =========================================================================== */
 :root {
   color-scheme: light;
 
-  /* Surfaces */
-  --surface-page: #f6f7f9;
+  /* Surfaces — warm bone canvas, white cards. */
+  --surface: var(--surface-card);
+  --surface-muted: var(--surface-sunken);
+  --surface-page: #fbfbfa;
   --surface-card: #ffffff;
-  --surface-sunken: #eef0f4;
+  --surface-sunken: #f4f3f0;
   --surface-raised: #ffffff;
-  --surface-inverse: #0d1117;
+  --surface-inverse: #111111;
 
-  /* Hairlines */
-  --line: #e2e5ea;
-  --line-strong: #cdd2da;
+  /* Hairlines — warm neutrals, never cool gray. */
+  --line: #eae8e4;
+  --line-strong: #ddd8d0;
 
-  /* Ink */
-  --ink: #18181b;            /* 18.9:1 */
-  --ink-secondary: #52525b;  /*  8.9:1 */
-  --ink-muted: #71717a;      /*  5.98:1 */
-  --ink-inverse: #fafafa;
+  /* Ink — off-black, never #000000. */
+  --ink: #2f3437;            /* body / headlines */
+  --ink-secondary: #5a5a5a;  /* captions, meta */
+  --ink-muted: #8a8a84;      /* placeholders, helper text */
+  --ink-inverse: #fbfbfa;
 
-  /* Brand — interaction only. Never used for market direction. */
-  --brand: #059669;          /*  6.29:1 */
-  --brand-hover: #047857;    /*  7.90:1 */
-  --brand-ink: #047857;      /* brand-as-text, e.g. links */
-  --on-brand: #ffffff;       /*  6.29:1 on --brand */
-  --brand-subtle: #d1fae5;
-  --brand-subtle-ink: #065f46;
-  --brand-ring: rgba(5, 150, 105, 0.4);
+  /* Brand — single accent, interaction only. Never used for market direction. */
+  --brand: #0e7490;
+  --brand-hover: #0b5d73;
+  --brand-ink: #0b5d73;
+  --on-brand: #ffffff;
+  --brand-subtle: #e3f0f5;
+  --brand-subtle-ink: #0b5d73;
+  --brand-ring: rgba(14, 116, 144, 0.35);
 
   /* Market direction — reserved. Always paired with a glyph + sign (see Delta). */
-  --up: #047857;             /*  5.48:1 */
-  --down: #b91c1c;           /*  6.47:1 */
-  --up-subtle: #e7f6ef;
-  --down-subtle: #fdeaea;
-  --flat: #71717a;
+  --up: #346538;
+  --down: #9f2f2d;
+  --up-subtle: #edf3ec;
+  --down-subtle: #fdebec;
+  --flat: #8a8a84;
 
   /* Status */
-  --warn: #b45309;           /*  4.90:1 */
+  --warn: #b45309;
   --warn-subtle: #fdf3e3;
   --danger: #b91c1c;
   --danger-hover: #991b1b;
   --danger-subtle: #fdeaea;
 
-  /* Chart chrome */
-  --chart-grid: #e4e4e7;
-  --chart-axis: #71717a;
-  --chart-baseline: #d4d4d8;
-  --chart-fill-from: rgba(5, 150, 105, 0.18);
-  --chart-fill-to: rgba(5, 150, 105, 0);
-  /* Pre-validated 3-slot categorical set (all-pairs pass, both modes). */
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --series-3: #1baf7a;
+  /* Chart chrome — light surfaces, zero-baseline honest bars. */
+  --chart-grid: #eae8e4;
+  --chart-axis: #8a8a84;
+  --chart-baseline: #d8d5cd;
+  --chart-fill-from: rgba(14, 116, 144, 0.16);
+  --chart-fill-to: rgba(14, 116, 144, 0);
+  /* Pre-validated 3-slot categorical set (all-pairs pass, light mode). */
+  --series-1: #0e7490;
+  --series-2: #c28a4a;
+  --series-3: #346538;
 
-  /* Elevation. Light mode gets real shadows. */
-  --elev-1: 0 1px 2px rgba(24, 24, 27, 0.05), 0 1px 1px rgba(24, 24, 27, 0.03);
-  --elev-2: 0 4px 12px rgba(24, 24, 27, 0.07), 0 1px 3px rgba(24, 24, 27, 0.04);
-  --elev-3: 0 16px 40px rgba(24, 24, 27, 0.12), 0 4px 10px rgba(24, 24, 27, 0.05);
+  /* Elevation — minimalist: shadows are diffuse, under 0.08 opacity, never
+     heavy drop shadows on light surfaces. */
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 1px rgba(0, 0, 0, 0.03);
+  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --elev-3: 0 12px 30px rgba(0, 0, 0, 0.08);
   --elev-inset: none;
 
-  /* Glassmorphism & gradient surfaces. */
+  /* Glassmorphism — subtle, used sparingly (nav, chat bubbles). */
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-border: rgba(255, 255, 255, 0.5);
   --glass-blur: 20px;
 }
 
+/* Dark mode — relegated to a secondary toggle. Clean warm inversion, kept for
+   the theme switch but light is the shipped default. */
 .dark {
   color-scheme: dark;
 
-  --surface-page: #0b0e14;
-  --surface-card: #141821;
-  --surface-sunken: #1b2029;
-  --surface-raised: #1b2029;
-  --surface-inverse: #f2f5f9;
+  --surface-page: #141412;
+  --surface-card: #1c1c19;
+  --surface-sunken: #242421;
+  --surface-raised: #1c1c19;
+  --surface-inverse: #fbfbfa;
+  --surface: var(--surface-card);
 
-  --line: #262d3a;
-  --line-strong: #38414f;
+  --line: #2a2927;
+  --line-strong: #3a3937;
 
-  --ink: #fafafa;            /* 15.6:1 */
-  --ink-secondary: #a1a1aa;  /* 10.1:1 */
-  --ink-muted: #71717a;      /*  6.93:1 */
-  --ink-inverse: #09090b;
+  --ink: #f5f5f2;
+  --ink-secondary: #c9c8c4;
+  --ink-muted: #8a8984;
+  --ink-inverse: #111111;
 
-  --brand: #34d399;          /*  5.95:1 */
-  --brand-hover: #6ee7b7;    /*  8.91:1 */
-  --brand-ink: #6ee7b7;
-  /* The headline fix: a filled button in dark mode is light indigo with
-     near-black ink (6.48:1). It used to be white on light green — 1.74:1. */
-  --on-brand: #09090b;       /*  6.48:1 on --brand */
-  --brand-subtle: rgba(52, 211, 153, 0.14);
-  --brand-subtle-ink: #6ee7b7;
-  --brand-ring: rgba(52, 211, 153, 0.5);
+  --brand: #5aa9c1;
+  --brand-hover: #7ec3d9;
+  --brand-ink: #0b3d52;
+  --on-brand: #0b3d52;
+  --brand-subtle: rgba(90, 169, 193, 0.14);
+  --brand-subtle-ink: #7ec3d9;
+  --brand-ring: rgba(90, 169, 193, 0.45);
 
-  --up: #34d399;             /*  9.24:1 */
-  --down: #f87171;           /*  6.42:1 */
-  --up-subtle: rgba(52, 211, 153, 0.14);
-  --down-subtle: rgba(248, 113, 113, 0.14);
-  --flat: #71717a;
+  --up: #6fc48a;
+  --down: #d87a73;
+  --up-subtle: rgba(104, 196, 138, 0.14);
+  --down-subtle: rgba(216, 122, 115, 0.14);
+  --flat: #8a8984;
 
-  --warn: #fbbf24;           /* 11.2:1 */
-  --warn-subtle: rgba(251, 191, 36, 0.14);
-  --danger: #f87171;
-  --danger-hover: #fca5a5;
-  --danger-subtle: rgba(248, 113, 113, 0.14);
+  --warn: #d9a44d;
+  --warn-subtle: rgba(217, 164, 77, 0.14);
+  --danger: #d87a73;
+  --danger-hover: #e08c85;
+  --danger-subtle: rgba(216, 122, 115, 0.14);
 
-  --chart-grid: #27272a;
-  --chart-axis: #71717a;
-  --chart-baseline: #3f3f46;
-  --chart-fill-from: rgba(52, 211, 153, 0.22);
-  --chart-fill-to: rgba(52, 211, 153, 0);
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-3: #199e70;
+  --chart-grid: #2a2927;
+  --chart-axis: #8a8984;
+  --chart-baseline: #3a3937;
+  --chart-fill-from: rgba(90, 169, 193, 0.2);
+  --chart-fill-to: rgba(90, 169, 193, 0);
+  --series-1: #5aa9c1;
+  --series-2: #d9a44d;
+  --series-3: #6fc48a;
 
-  /* Shadows don't read on dark surfaces; a 1px top highlight does the
-     "raised" work instead, applied via .elevated below. */
-  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --elev-2: 0 4px 14px rgba(0, 0, 0, 0.45);
-  --elev-3: 0 18px 44px rgba(0, 0, 0, 0.6);
-  --elev-inset: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --elev-2: 0 4px 14px rgba(0, 0, 0, 0.6);
+  --elev-3: 0 18px 44px rgba(0, 0, 0, 0.75);
+  --elev-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 
-  /* Glassmorphism & gradient surfaces. */
-  --glass-bg: rgba(24, 24, 27, 0.75);
-  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-bg: rgba(24, 24, 22, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.06);
   --glass-blur: 20px;
+  --surface: var(--surface-card);
+  --surface-muted: var(--surface-sunken);
 }
 
 /* ===========================================================================
    TAILWIND THEME MAPPING
-   `inline` matters: it inlines var(--ink) into the utility instead of routing
-   through a :root-scoped copy, so a `.dark` class works on any subtree, not
-   just <html>.
+   `inline` so `.dark` works on any subtree, not just <html>.
    =========================================================================== */
 @theme inline {
   --color-page: var(--surface-page);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
   --color-card: var(--surface-card);
   --color-sunken: var(--surface-sunken);
   --color-raised: var(--surface-raised);
@@ -173,6 +170,7 @@
   --color-on-brand: var(--on-brand);
   --color-brand-subtle: var(--brand-subtle);
   --color-brand-subtle-ink: var(--brand-subtle-ink);
+  --color-brand-ring: var(--brand-ring);
 
   --color-up: var(--up);
   --color-down: var(--down);
@@ -231,14 +229,14 @@
   --text-xs--line-height: 1.45;
   --text-xs--letter-spacing: 0.02em;
 
-  /* One radius per component tier. */
+  /* One radius per component tier. Crisp 8px–12px max — no rounded-full on
+     cards or primary buttons (minimalist-ui). */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
   --radius-2xl: 24px;
 
-  /* Replaces five hardcoded calc(100vh - 64px) and one calc(100vh - 19rem). */
   --spacing-nav: 4rem;
 
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
@@ -322,22 +320,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-variant-numeric: tabular-nums;
-    /* Smooth the dark/light toggle: colours cross-fade instead of snapping.
-       Scoped to colours only, so it never delays layout or shadows. */
     transition:
       background-color 300ms var(--ease-out-quart),
       color 300ms var(--ease-out-quart);
-  }
-
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    pointer-events: none;
-    opacity: 0.018;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    mix-blend-mode: overlay;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -345,8 +330,7 @@
     text-wrap: balance;
   }
 
-  /* A visible focus ring everywhere, once. Seven `focus:outline-none`
-     declarations used to remove this with nothing put back. */
+  /* A visible focus ring everywhere, once. */
   :focus-visible {
     outline: 2px solid var(--brand);
     outline-offset: 2px;
@@ -363,7 +347,6 @@
     opacity: 1;
   }
 
-  /* Keep the browser from painting a white autofill block over dark inputs. */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
@@ -408,13 +391,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
-/* Removed AI slop utilities: brand-glow, hero-gradient, text-gradient-brand */
-
-/* ---------------------------------------------------------------------------
-   Scroll-in animations (plan §18). `@starting-style` lets a card fade/slide
-   in the first time it is rendered, without JS or an observer. Guarded by
-   `prefers-reduced-motion` via the global kill switch below.
-   --------------------------------------------------------------------------- */
+/* Scroll-in animations (guarded by prefers-reduced-motion globally below). */
 @layer utilities {
   .animate-scroll-in {
     animation: fade-in-up 600ms var(--ease-out-quart) both;
@@ -455,8 +432,7 @@
 }
 
 /* ===========================================================================
-   REDUCED MOTION — one global kill switch. There was none before, and the
-   ticker tape scrolled unconditionally.
+   REDUCED MOTION — one global kill switch.
    =========================================================================== */
 @media (prefers-reduced-motion: reduce) {
   html {
@@ -469,8 +445,6 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  /* The marquee is the one case where killing the animation must also stop
-     the content mid-flow rather than snapping it to -50%. */
   [data-marquee] {
     animation: none !important;
     transform: none !important;

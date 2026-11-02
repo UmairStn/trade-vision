@@ -125,10 +125,10 @@ export const NewsHub = () => {
                 className={cn(
                   'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl',
                   mood.label === 'Bullish'
-                    ? 'bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/20'
+                    ? 'bg-up-subtle text-up ring-1 ring-up/20'
                     : mood.label === 'Bearish'
-                    ? 'bg-rose-500/10 text-rose-500 ring-1 ring-rose-500/20'
-                    : 'bg-slate-500/10 text-slate-500 ring-1 ring-slate-500/20'
+                    ? 'bg-down-subtle text-down ring-1 ring-down/20'
+                    : 'bg-sunken text-ink-muted ring-1 ring-line/60'
                 )}
               >
                 {mood.label === 'Bullish' ? (
@@ -146,9 +146,9 @@ export const NewsHub = () => {
                     <span
                       className={cn(
                         mood.label === 'Bullish'
-                          ? 'text-emerald-500'
+                          ? 'text-up'
                           : mood.label === 'Bearish'
-                          ? 'text-rose-500'
+                          ? 'text-down'
                           : 'text-ink'
                       )}
                     >
@@ -168,30 +168,30 @@ export const NewsHub = () => {
             {/* Visual Mood Distribution Bar */}
             <div className="w-full lg:max-w-md">
               <div className="flex justify-between text-xs font-medium text-ink-muted mb-2">
-                <span className="text-emerald-500 flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="text-up flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-up" />
                   {mood.bullish_count} Bullish ({mood.bullish_pct}%)
                 </span>
-                <span className="text-slate-400 flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-slate-400" />
+                <span className="text-ink-muted flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-ink-muted" />
                   {mood.neutral_count} Neutral
                 </span>
-                <span className="text-rose-500 flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-rose-500" />
+                <span className="text-down flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-down" />
                   {mood.bearish_count} Bearish
                 </span>
               </div>
               <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-surface-muted ring-1 ring-line">
                 <div
-                  className="bg-emerald-500 transition-all duration-500"
+                  className="bg-up transition-all duration-500"
                   style={{ width: `${(mood.bullish_count / Math.max(mood.total_analyzed, 1)) * 100}%` }}
                 />
                 <div
-                  className="bg-slate-400/60 transition-all duration-500"
+                  className="bg-ink-muted/50 transition-all duration-500"
                   style={{ width: `${(mood.neutral_count / Math.max(mood.total_analyzed, 1)) * 100}%` }}
                 />
                 <div
-                  className="bg-rose-500 transition-all duration-500"
+                  className="bg-down transition-all duration-500"
                   style={{ width: `${(mood.bearish_count / Math.max(mood.total_analyzed, 1)) * 100}%` }}
                 />
               </div>

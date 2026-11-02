@@ -429,7 +429,7 @@ const Overview = ({
               size="hero"
               label="Portfolio value"
               value={
-                <span className="text-gradient-brand">
+                <span className="text-brand text-h1 font-bold">
                   Rs {formatPrice(totals.value)}
                 </span>
               }

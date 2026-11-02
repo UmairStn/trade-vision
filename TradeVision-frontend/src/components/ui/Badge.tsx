@@ -5,9 +5,10 @@ export type BadgeTone = 'neutral' | 'brand' | 'up' | 'down' | 'warn' | 'outline'
 
 /**
  * Status tones always ship with a label, and callers pass an icon for anything
- * that carries meaning — a badge never communicates by colour alone. `warn` in
- * light mode is a deliberately dark amber (#b45309, 4.9:1) rather than the usual
- * bright one, which measures under 2:1 on white.
+ * that carries meaning — a badge never communicates by colour alone.
+ *
+ * Pill-shaped tags per the light-theme spec: rounded-full, text-xs, uppercase
+ * with wide tracking, muted pastel backgrounds.
  */
 const tones: Record<BadgeTone, string> = {
   neutral: 'bg-sunken text-ink-secondary border-transparent',
@@ -36,18 +37,15 @@ export const Badge = ({
 }) => (
   <span
     className={cn(
-      'inline-flex items-center gap-1.5 rounded-sm border font-medium whitespace-nowrap',
-      size === 'sm' ? 'px-1.5 py-0.5 text-xs' : size === 'lg' ? 'px-3 py-1 text-sm' : 'px-2 py-1 text-xs',
+      'inline-flex items-center gap-1.5 rounded-full border font-medium whitespace-nowrap uppercase tracking-wider',
+      size === 'sm' ? 'px-2 py-0.5 text-[10px]' : size === 'lg' ? 'px-3 py-1 text-xs' : 'px-2.5 py-0.5 text-xs',
       tones[tone],
       className,
     )}
   >
     {dot && (
       <span
-        className={cn(
-          'h-1.5 w-1.5 shrink-0 rounded-full bg-current',
-          tone === 'up' && 'motion-safe:animate-pulse',
-        )}
+        className={cn('h-1.5 w-1.5 shrink-0 rounded-full bg-current', tone === 'up' && 'motion-safe:animate-pulse')}
         aria-hidden="true"
       />
     )}

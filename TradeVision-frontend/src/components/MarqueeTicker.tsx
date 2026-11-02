@@ -59,7 +59,7 @@ export const MarqueeTicker = ({ items }: { items: StockQuote[] }) => {
   const animated = !reducedMotion;
 
   return (
-    <div className="flex w-full items-stretch border-y border-brand/10 bg-linear-to-r from-card via-sunken to-card">
+    <div className="flex w-full items-stretch border-y border-line bg-card">
       {/* The unit is stated once here rather than repeated on every symbol, so
           the tape stays scannable without dropping the currency entirely. */}
       <span className="flex shrink-0 items-center rounded-sm border border-brand/20 bg-brand-subtle px-3 text-xs font-semibold tracking-wide text-brand-subtle-ink uppercase">

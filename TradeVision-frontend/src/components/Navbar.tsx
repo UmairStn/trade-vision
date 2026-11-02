@@ -32,8 +32,8 @@ export const Navbar = () => {
 
   return (
     <header
-      className="sticky top-4 z-40 mx-auto w-max max-w-[calc(100vw-2rem)] rounded-full border border-line bg-page/90
-                 elevated-pop backdrop-blur-xl"
+      className="sticky top-4 z-40 mx-auto w-max max-w-[calc(100vw-2rem)] border-b border-line bg-page/95
+                 backdrop-blur-sm"
     >
       <nav aria-label="Main" className="relative flex h-14 items-center gap-4 px-4 sm:px-6">
         <Link

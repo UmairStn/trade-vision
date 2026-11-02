@@ -55,10 +55,11 @@ import {
  * panel below it is a normal block.
  */
 
-const RANGE_DAYS = { '1M': 30, '3M': 90, '6M': 180, '1Y': 365 } as const;
+const RANGE_DAYS = { '7D': 7, '1M': 30, '3M': 90, '6M': 180, '1Y': 365 } as const;
 type RangeKey = keyof typeof RANGE_DAYS;
 
 const RANGE_WORDS: Record<RangeKey, string> = {
+  '7D': 'the last seven days',
   '1M': 'the last month',
   '3M': 'the last three months',
   '6M': 'the last six months',
@@ -89,7 +90,7 @@ export const StockAnalyzer = () => {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(true);
 
-  const [range, setRange] = useState<RangeKey>('3M');
+  const [range, setRange] = useState<RangeKey>('7D');
   const [history, setHistory] = useState<StockPrice[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -329,7 +330,7 @@ export const StockAnalyzer = () => {
           </div>
         }
         description={
-          <span className="text-gradient-brand text-h3 font-bold">{ticker}</span>
+          <span className="text-brand text-h3 font-bold">{ticker}</span>
         }
         actions={
           <>
@@ -462,6 +463,7 @@ export const StockAnalyzer = () => {
             value={range}
             onChange={(val) => setRange(val as RangeKey)}
             options={[
+              { value: '7D', label: '7D' },
               { value: '1M', label: '1M' },
               { value: '3M', label: '3M' },
               { value: '6M', label: '6M' },
