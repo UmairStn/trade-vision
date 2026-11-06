@@ -1,6 +1,6 @@
 # TradeVision 📈
 
-> **Under active development** — built as a 4th-year capstone project.
+> **Under active development** — built as a 2nd-year capstone project.
 
 TradeVision is a web application for analyzing stocks listed on the **Colombo Stock Exchange (CSE)**. It pairs interactive market charts with AI-powered price predictions, a natural-language chatbot, and a personal portfolio tracker — all in one place.
 
